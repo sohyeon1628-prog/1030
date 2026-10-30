@@ -1,14 +1,17 @@
-import { H, LEN, ISLAND, LANE_Y } from "./constants.js";
+import { H, LEN, LAND_Y, LANE_Y, VX, VX_MAX } from "./constants.js";
 
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-// 편지 id로 시드를 만들어 같은 편지는 항상 같은 코스가 나오게 한다.
+// 시드가 있는 난수. 비행마다 새 시드를 써서 같은 편지라도 매번 다른 코스가 나온다.
 function seeded(str) {
   let s = 0;
   for (const c of str) s = (s * 31 + c.charCodeAt(0)) >>> 0;
   return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
 }
+
+// 진행률 p에서의 전진 속도. 출발은 VX, 착륙 구간 직전(p=0.8)에 VX_MAX까지 오른다.
+export const speedAt = (p) => VX + (VX_MAX - VX) * clamp(p / 0.8, 0, 1);
 
 // 진행률 p(0~1)에서의 이상적인 고도(px). 착륙 구간에서는 자동으로 이 높이를 따라 내려앉는다.
 export function guide(p) {
@@ -16,79 +19,115 @@ export function guide(p) {
   if (p < 0.5) return lerp(0.2 * H, 0.68 * H, (p - 0.05) / 0.45);
   if (p < 0.75) return 0.68 * H + Math.sin((p - 0.5) * 40) * 0.1 * H;
   const t = clamp((p - 0.75) / 0.2, 0, 1);
-  return lerp(0.68 * H, ISLAND + 30, t * t * (3 - 2 * t));
+  return lerp(0.68 * H, LAND_Y, t * t * (3 - 2 * t));                  // 착륙 지점(p=0.95)에서 발이 잔디에 닿는다
 }
 
-export function buildLevel(letter) {
+// 사고는 정해진 간격이 아니라 "패턴"을 무작위로 뽑아 불규칙한 간격으로 놓는다. 뒤로 갈수록 촘촘하고 경고가 짧다.
+//   단일: 새 떼·비행기 한 줄 / 상어·고래 점프
+//   급강하: 검은 새 떼가 경고된 줄로 오다가 도중에 옆 줄로 꺾는다
+//   벽: 두 줄에 동시에 날아온다(남은 한 줄로 피한다)
+//   협공: 바다에서 뛰어오르는 동안 위 줄에도 새가 온다
+//   먹구름(위아래로 떠다니기도 한다) · 번개 · 회오리
+// 모든 사고가 막는 줄과 구간(x)을 blocks에 적어 두고, 같은 자리에서 세 줄이 모두 막히는 패턴은 버린다.
+export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.random()}`) {
   const f = letter.flight;
-  const rnd = seeded(letter.id);
+  const rnd = seeded(seed);
   const ws = f.windStrength;
-  const lane = () => Math.min(2, Math.floor(rnd() * 3));
-  const clouds = [], vortices = [], events = [], bolts = [];
+  const pick = (a) => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const lane = () => pick([0, 1, 2]);
+  const clouds = [], vortices = [], events = [], bolts = [], blocks = [];
 
-  // 갑자기 일어나는 사건: 새 떼가 오른쪽에서 날아오고, 비행기가 가로지르고, 상어·고래가 바다에서 뛰어오른다.
-  // 사건은 일어나기 직전에 경고(물결·그림자, 날아올 줄의 붉은 띠)가 먼저 뜬다. 길 여유(corridorWidth)가 넓은 편지일수록 경고가 길다.
-  // 상어·고래는 아래 줄만(낮게) 또는 아래·가운데 줄(높게) 덮고, 위 줄은 늘 비어 있다.
-  const warn = Math.max(0.8, Math.min(1.15, 0.55 + f.corridorWidth / 400));
-  const step = 430 - 42 * ws;
-  for (let x = 0.1 * LEN; x < 0.84 * LEN; x += step + (rnd() - 0.5) * 80) {
-    const p = x / LEN, r = rnd();
-    const kind = p < 0.5 ? (r < 0.28 ? "shark" : r < 0.52 ? "whale" : "birds")
-      : (r < 0.15 ? "shark" : r < 0.28 ? "whale" : r < 0.55 ? "birds" : "plane");
-    const peak = rnd() < 0.5 ? 190 + rnd() * 55 : 335 + rnd() * 60;
-    events.push({ kind, x, peak, lane: lane(), w: kind === "whale" ? 56 : 46, seed: rnd() * 6, state: "idle", t: 0, y: 0, h: 0, px: 0 });
+  const free = (l, a, b) => !blocks.some((k) => k.lane === l && k.b > a && k.a < b);
+  const fits = (want) => {                                   // want: [{lane, a, b}] — 더해도 어느 x에서나 한 줄은 비어 있는가
+    const all = [...blocks, ...want];
+    const xs = all.flatMap((k) => [k.a, k.b]);
+    return xs.every((x) => [0, 1, 2].some((l) => !all.some((k) => k.lane === l && k.a <= x && x <= k.b)));
+  };
+  const commit = (want, add) => { if (!fits(want)) return false; blocks.push(...want); add(); return true; };
+  const fly = (kind, x, l, p, extra = {}) => ({
+    kind, x, lane: l, warn: warnAt(p), seed: rnd() * 6, state: "idle", t: 0, y: 0, h: 0, px: 0, cy: 0, ...extra,
+  });
+  // 경고 시간: 길 여유(corridorWidth)가 넓을수록 길고, 뒤로 갈수록 짧다
+  const warnAt = (p) => clamp(0.5 + f.corridorWidth / 700 - 0.35 * p, 0.42, 0.95);
+
+  const patterns = [
+    { w: 3, min: 0, make: (x, p) => { const l = lane(); return commit([{ lane: l, a: x - 90, b: x + 90 }], () => events.push(fly(p > 0.4 && rnd() < 0.45 ? "plane" : "birds", x, l, p))); } },
+    { w: 2.2, min: 0, make: (x, p) => {
+      const kind = rnd() < 0.55 ? "shark" : "whale", high = rnd() < 0.35 + 0.3 * p;
+      // 낮게 뛰면 정점이 아래 줄, 높게 뛰면 가운데 줄에 걸린다(그 밑으로 빠져나갈 수 있다)
+      return commit([{ lane: high ? 1 : 0, a: x - 110, b: x + 110 }], () => events.push(fly(kind, x, 0, p, { peak: high ? 285 + rnd() * 30 : 120 + rnd() * 25 })));
+    } },
+    { w: 1.6 + ws * 0.3, min: 0.18, make: (x, p) => {
+      const from = lane(), to = from === 1 ? pick([0, 2]) : 1;
+      return commit([{ lane: from, a: x - 260, b: x - 40 }, { lane: to, a: x - 120, b: x + 90 }], () => events.push(fly("birds", x, from, p, { dive: to, dived: false })));
+    } },
+    { w: 1.2 + ws * 0.4, min: 0.3, make: (x, p) => {
+      const open = lane(), ls = [0, 1, 2].filter((l) => l !== open);
+      return commit(ls.map((l) => ({ lane: l, a: x - 90, b: x + 90 })), () => ls.forEach((l, i) => events.push(fly(i && p > 0.55 ? "plane" : "birds", x, l, p))));
+    } },
+    { w: 1, min: 0.45, make: (x, p) => {
+      const kind = rnd() < 0.5 ? "shark" : "whale";
+      return commit([{ lane: 0, a: x - 110, b: x + 110 }, { lane: 2, a: x - 90, b: x + 90 }], () => {
+        events.push(fly(kind, x, 0, p, { peak: 120 + rnd() * 25 }));
+        events.push(fly("birds", x, 2, p));
+      });
+    } },
+    { w: 1.6, min: 0.12, make: (x) => {
+      const drift = rnd() < 0.5, l = drift ? pick([0, 1]) : lane();                   // 떠다니는 구름은 두 줄 사이를 오르내린다
+      const want = drift ? [{ lane: l, a: x - 90, b: x + 90 }, { lane: l + 1, a: x - 90, b: x + 90 }] : [{ lane: l, a: x - 70, b: x + 70 }];
+      return commit(want, () => clouds.push({ x, lane: l, y: LANE_Y[l], r: 32, drift: drift ? { a: LANE_Y[l], b: LANE_Y[l + 1], w: 1.4 + rnd() * 1.2, ph: rnd() * 6 } : null }));
+    } },
+    { w: 0.6 + ws * 0.35, min: 0.35, make: (x, p) => { const l = lane(); return commit([{ lane: l, a: x - 60, b: x + 60 }], () => bolts.push({ x, lane: l, warn: clamp(0.85 - 0.4 * p, 0.5, 0.85), state: "idle", t: 0 })); } },
+    { w: 0.5, min: 0.4, make: (x) => { const l = lane(); return commit([{ lane: l, a: x - 60, b: x + 60 }], () => vortices.push({ x, lane: l, y: LANE_Y[l], r: 55, inside: false })); } },
+  ];
+
+  for (let x = 0.07 * LEN; x < 0.86 * LEN;) {
+    const p = x / LEN;
+    const pool = patterns.filter((q) => p >= q.min);
+    for (let tries = 0; tries < 4; tries++) {                    // 세 줄을 다 막는 패턴이면 다른 패턴을 다시 뽑는다
+      let r = rnd() * pool.reduce((a, q) => a + q.w, 0), q = pool[0];
+      for (const c of pool) { if ((r -= c.w) <= 0) { q = c; break; } }
+      if (q.make(x, p)) break;
+    }
+    // 다음 사고까지의 거리: 짧게 몰아치다가 숨을 고르기도 한다
+    const base = lerp(620, 360, p) - ws * 25;
+    x += base * (rnd() < 0.2 ? 0.45 : 0.7 + rnd() * 0.9);
   }
-  // 변속 구간: 먹구름과 역풍 소용돌이(회오리). 둘 다 한 줄을 막는다.
-  for (let x = 0.53 * LEN; x < 0.74 * LEN; x += 300) if (rnd() < 0.45 + 0.25 * ws) clouds.push({ x, lane: lane(), y: 0, r: 32 });
-  for (let i = 0; i < (ws === 3 ? 2 : 1); i++) vortices.push({ x: (0.58 + i * 0.1) * LEN, lane: lane(), y: 0, r: 55, inside: false });
-  // 번개(변속 구간): 예고 뒤 한 줄을 내리친다. 표시된 줄을 피하면 된다.
-  for (let i = 0; i < ws - 1; i++) bolts.push({ x: (0.58 + i * 0.09) * LEN, lane: lane(), state: "idle", t: 0 });
-  clouds.forEach((c) => { c.y = LANE_Y[c.lane]; });
-  vortices.forEach((v) => { v.y = LANE_Y[v.lane]; });
-  // 비: 내리는 동안 날개가 젖어 줄을 옮기는 것이 느려진다. 바람이 거센 편지일수록 오래 내린다.
-  const rain = ws === 1 ? [[0.2, 0.3]] : ws === 2 ? [[0.18, 0.3], [0.56, 0.68]] : [[0.15, 0.3], [0.52, 0.72]];
+  // 비: 바람이 거센 편지일수록 자주, 오래 내린다. 시작 자리는 매번 다르다.
+  const rain = [];
+  for (let i = 0; i < ws; i++) { const a = 0.12 + i * 0.25 + rnd() * 0.12; rain.push([a, a + 0.08 + 0.04 * ws * rnd()]); }
 
   // ── 아이템: 사고가 나는 줄을 피해, 안전한 줄에만 놓는다(길을 알려 주는 역할도 한다) ──
-  const danger = (l, x) => {
-    for (const e of events) {
-      const breach = e.kind === "shark" || e.kind === "whale";
-      if (breach) { if (x > e.x - 130 && x < e.x + 130 && (l === 0 || (l === 1 && e.peak > 285))) return true; }
-      else if (e.lane === l && x > e.x + 230 && x < e.x + 680) return true;
-    }
-    for (const c of clouds) if (c.lane === l && Math.abs(x - c.x) < 100) return true;
-    for (const v of vortices) if (v.lane === l && Math.abs(x - v.x) < 110) return true;
-    for (const b of bolts) if (b.lane === l && Math.abs(x - b.x) < 130) return true;
-    return false;
-  };
   const items = [];
   const put = (kind, x, prefer = -1) => {
-    const safe = [0, 1, 2].filter((l) => !danger(l, x));
+    const safe = [0, 1, 2].filter((l) => free(l, x - 50, x + 50));
     if (!safe.length) return -1;
-    const l = safe.includes(prefer) ? prefer : safe[Math.min(safe.length - 1, Math.floor(rnd() * safe.length))];
+    const l = safe.includes(prefer) ? prefer : pick(safe);
     items.push({ kind, x, lane: l, taken: false });
     return l;
   };
-  for (let g = 0; g < 3; g++) {                                  // 기억 구슬: 세 개씩 세 무리
+  for (let g = 0; g < 3; g++) {                                  // 기억 구슬: 세 개씩 세 무리, 자리는 매번 다르다
     let l = -1;
-    for (let k = 0; k < 3; k++) l = put("orb", (0.2 + g * 0.2) * LEN + k * 80, l);
+    const x0 = (0.16 + g * 0.22 + rnd() * 0.08) * LEN;
+    for (let k = 0; k < 3; k++) l = put("orb", x0 + k * 110, l);
   }
-  put("shield", 0.28 * LEN); put("shield", 0.58 * LEN);          // 깃털 방패
-  put("heart", 0.42 * LEN); if (ws >= 2) put("heart", 0.66 * LEN);   // 심장
-  put("ribbon", 0.62 * LEN);                                     // 순풍 리본
-  put("umbrella", Math.max(0.08 * LEN, rain[0][0] * LEN - 320)); // 우산(첫 비 직전)
+  put("shield", (0.22 + rnd() * 0.12) * LEN); put("shield", (0.52 + rnd() * 0.12) * LEN);   // 깃털 방패
+  put("heart", (0.38 + rnd() * 0.1) * LEN); if (ws >= 2) put("heart", (0.64 + rnd() * 0.1) * LEN);   // 심장
+  put("ribbon", (0.45 + rnd() * 0.25) * LEN);                    // 순풍 리본
+  put("umbrella", Math.max(0.06 * LEN, rain[0][0] * LEN - 500)); // 우산(첫 비 직전)
   items.sort((a, b) => a.x - b.x);
-  return { f, clouds, vortices, events, warn, bolts, rain, items };
+  return { f, clouds, vortices, events, warn: warnAt(0), bolts, rain, items, blocks };
 }
 
 // 연습 비행: 처음 하는 사람을 위해 구슬·아이템·위험 하나하나를 차례로 만나고, 위험이 닥치는 곳을 짚어 주는 짧은 코스.
 // 코스는 고정이고, 안내(coach)는 해당 위치(x = LEN의 비율)를 지날 때 하나씩 뜬다.
 export function buildPracticeLevel() {
   const X = (p) => p * LEN;
-  const ev = (kind, p, lane, peak = 215) => ({ kind, x: X(p), peak, lane, w: kind === "whale" ? 56 : 46, seed: p * 9, state: "idle", t: 0, y: 0, h: 0, px: 0 });
+  const ev = (kind, p, lane, peak = 135) => ({ kind, x: X(p), peak, lane, warn: 1.2, seed: p * 9, state: "idle", t: 0, y: 0, h: 0, px: 0, cy: 0 });
   const it = (kind, p, lane, off = 0) => ({ kind, x: X(p) + off, lane, taken: false });
   const clouds = [{ x: X(0.39), lane: 2, y: LANE_Y[2], r: 32 }];
   const vortices = [{ x: X(0.6), lane: 1, y: LANE_Y[1], r: 55, inside: false }];
-  const bolts = [{ x: X(0.69), lane: 1, state: "idle", t: 0 }];
+  const bolts = [{ x: X(0.69), lane: 1, warn: 0.9, state: "idle", t: 0 }];
   const events = [ev("birds", 0.25, 1), ev("shark", 0.42, 0), ev("birds", 0.54, 1)];
   const items = [
     it("orb", 0.13, 1), it("orb", 0.13, 2, 90), it("orb", 0.13, 1, 180),

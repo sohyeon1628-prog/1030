@@ -1,4 +1,4 @@
-import { H, SX, LEN, ISLAND, LANE_Y, MAX_HITS } from "./constants.js";
+import { H, SX, LEN, ISLAND, LANE_Y, MAX_HITS, JUMP_T, JUMP_SPAN, START_TOP, GRASS, FOOT } from "./constants.js";
 import { lerp, clamp } from "./level.js";
 
 // 참고 이미지 팔레트: 석양빛 오렌지 + 크림 + 올리브 그린 + 포인트(빨강/민트/하늘)
@@ -106,22 +106,26 @@ function island(ctx, x, top, w, opts = {}) {
 // 편지 가방을 메고 날아가는 우체부 (오른쪽을 보고 날아간다). 큰 둥근 머리, 앞으로 숙인 자세, 등의 우편 날개가 퍼덕인다.
 function postman(ctx, F, sy) {
   const thrust = F.thrust;
-  const flap = Math.sin(F.t * 14) * (0.2 + 0.4 * thrust);
-  const swing = Math.sin(F.t * 9) * 0.18;
+  // 섬 위에 서 있을 때(stand=1): 똑바로 서서 다리를 아래로, 날개는 접은 채 이륙이 다가올수록 들썩인다. 발을 떼면 금방 비행 자세로.
+  const stand = Math.max(clamp(1 - F.lift * 3, 0, 1), F.land);                      // 착륙하면 다시 서 있는 자세로
+  const ready = F.mode === "count" ? clamp(1 - F.cd / 2, 0, 1) : 1;
+  const flap = Math.sin(F.t * (14 - 6 * stand)) * (0.2 + 0.4 * thrust) * (1 - stand * (1 - 0.6 * ready));
+  const swing = Math.sin(F.t * (9 + 9 * stand)) * (F.lift > 0 && F.lift < 0.25 ? 0.6 : 0.18 * (1 - stand));   // 도움닫기 중엔 다리를 크게 휘젓는다
+  const crouch = F.mode === "count" && F.cd < 0.35 && stand ? 0.1 : 0;                                // 뛰기 직전 몸을 웅크린다
   const jacket = F.rev > 0 ? "#a63a28" : "#4f7fb5", jacketLt = F.rev > 0 ? "#c4503a" : "#6f9bd0";
   const skin = "#f6d2b0", pants = "#6b4a3a", boot = "#3d2a22", leather = "#c98a4b", leatherDk = "#a56d33";
 
   ctx.save();
-  ctx.translate(SX, sy);
-  ctx.rotate(clamp(-F.vy / 300, -0.5, 0.5) + 0.3);       // 앞으로 숙인 비행 자세
-  ctx.scale(0.95, 0.95);
+  ctx.translate(SX, sy + crouch * FOOT);                                                // 웅크려도 발은 그 자리에
+  ctx.rotate((clamp(-F.vy / 300, -0.5, 0.5) + 0.3) * (1 - stand));   // 앞으로 숙인 비행 자세(서 있을 땐 똑바로)
+  ctx.scale(0.95, 0.95 * (1 - crouch));
 
   // 우편 날개: 등 위쪽에서 퍼덕인다 (먼 쪽은 옅게)
   for (const [alpha, off] of [[0.6, 5], [1, 0]]) {
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(-8 + off, -10);
-    ctx.rotate(-1.0 - flap);
+    ctx.rotate(-1.0 - flap + stand * 0.5);
     ctx.fillStyle = "#fff";
     path(ctx, () => { ctx.moveTo(0, 0); ctx.bezierCurveTo(-4, -22, -24, -34, -38, -14); ctx.bezierCurveTo(-24, -14, -12, -6, 0, 5); });
     ctx.fill();
@@ -135,7 +139,7 @@ function postman(ctx, F, sy) {
   for (const [sw, col] of [[-swing, "#58392b"], [swing, pants]]) {
     ctx.save();
     ctx.translate(-3, 12);
-    ctx.rotate(Math.PI - 0.55 + sw);
+    ctx.rotate(Math.PI - 0.55 + sw - stand * (Math.PI / 2 - 0.55));   // 서 있을 땐 아래로 곧게
     rr(ctx, 0, -4.5, 19, 9, 4.5, col);
     rr(ctx, 15, -6, 11, 12, 5, boot);
     ctx.restore();
@@ -193,49 +197,61 @@ function splash(ctx, x, y, t) {                                  // 물보라
   }
 }
 
-// 수직으로 솟구치는 상어/고래: 머리가 위(top), 몸은 물속(seaY)에서 올라온다
-function creature(ctx, kind, cx, top, seaY, t) {
+// 호를 그리며 뛰어오르는 상어/고래: 원점이 몸통 중심, 머리가 +x를 본다. 그리는 쪽에서 진행 방향으로 돌린다.
+function jumper(ctx, kind, t) {
   const whale = kind === "whale";
-  const h = Math.max(80, seaY - top + 26), w = whale ? 54 : 44;
+  const [L, T] = whale ? [124, 44] : [100, 34];
   const [c0, c1] = whale ? ["#5b8bc2", "#3f6ea5"] : ["#8ea4ba", "#6c8299"];
-  ctx.save();
-  ctx.translate(cx + Math.sin(t * 3 + cx * 0.01) * 3, 0);
-  ctx.fillStyle = vg(ctx, top, h, c0, c1);                       // 몸통
-  path(ctx, () => { ctx.moveTo(0, top); ctx.bezierCurveTo(w * 0.62, top + h * 0.12, w * 0.58, top + h * 0.7, w * 0.22, top + h); ctx.lineTo(-w * 0.22, top + h); ctx.bezierCurveTo(-w * 0.58, top + h * 0.7, -w * 0.62, top + h * 0.12, 0, top); });
+  const wag = Math.sin(t * 9) * 0.18;                                          // 꼬리를 흔든다
+  ctx.fillStyle = c1;
+  ctx.save(); ctx.translate(-L * 0.4, 0); ctx.rotate(wag);                     // 꼬리지느러미
+  path(ctx, () => {
+    if (whale) { ctx.moveTo(4, 0); ctx.bezierCurveTo(-8, -6, -26, -26, -30, -22); ctx.bezierCurveTo(-24, -12, -18, -4, -14, 0); ctx.bezierCurveTo(-18, 4, -24, 12, -30, 22); ctx.bezierCurveTo(-26, 26, -8, 6, 4, 0); }
+    else { ctx.moveTo(4, 0); ctx.lineTo(-20, -T * 0.8); ctx.lineTo(-12, 0); ctx.lineTo(-18, T * 0.55); ctx.closePath(); }
+  });
+  ctx.fill(); ctx.restore();
+  path(ctx, () => {                                                            // 등지느러미
+    if (whale) { ctx.moveTo(-L * 0.08, -T * 0.42); ctx.quadraticCurveTo(-L * 0.16, -T * 0.72, -L * 0.22, -T * 0.36); }
+    else { ctx.moveTo(L * 0.02, -T * 0.44); ctx.lineTo(-L * 0.12, -T * 1.1); ctx.lineTo(-L * 0.2, -T * 0.4); }
+  });
   ctx.fill();
-  ctx.fillStyle = "#eef2f6";                                      // 배(오른쪽 절반)
-  path(ctx, () => { ctx.moveTo(w * 0.05, top + h * 0.12); ctx.bezierCurveTo(w * 0.56, top + h * 0.22, w * 0.5, top + h * 0.7, w * 0.18, top + h); ctx.lineTo(w * 0.02, top + h); ctx.bezierCurveTo(w * 0.3, top + h * 0.7, w * 0.3, top + h * 0.3, w * 0.05, top + h * 0.12); });
+  ctx.fillStyle = vg(ctx, -T / 2, T, c0, c1);                                  // 몸통
+  path(ctx, () => {
+    if (whale) { ctx.moveTo(L * 0.5, 0); ctx.bezierCurveTo(L * 0.5, -T * 0.62, -L * 0.1, -T * 0.66, -L * 0.42, -T * 0.08); ctx.lineTo(-L * 0.42, T * 0.08); ctx.bezierCurveTo(-L * 0.1, T * 0.56, L * 0.5, T * 0.6, L * 0.5, 0); }
+    else { ctx.moveTo(L * 0.5, 2); ctx.bezierCurveTo(L * 0.34, -T * 0.58, -L * 0.2, -T * 0.6, -L * 0.42, -T * 0.08); ctx.lineTo(-L * 0.42, T * 0.08); ctx.bezierCurveTo(-L * 0.2, T * 0.5, L * 0.3, T * 0.52, L * 0.5, 2); }
+  });
   ctx.fill();
-  const ey = top + (whale ? 22 : 16);
-  blob(ctx, -w * 0.2, ey, 3.4, "#1f2d3a"); blob(ctx, -w * 0.21, ey - 1.2, 1.1, "#fff");   // 눈
+  ctx.fillStyle = "#eef2f6";                                                   // 배
+  path(ctx, () => { ctx.moveTo(L * 0.46, 5); ctx.bezierCurveTo(L * 0.3, T * 0.5, -L * 0.15, T * 0.44, -L * 0.36, T * 0.07); ctx.bezierCurveTo(-L * 0.1, T * 0.2, L * 0.25, T * 0.18, L * 0.46, 5); });
+  ctx.fill();
+  ctx.fillStyle = c1;                                                          // 가슴지느러미
+  path(ctx, () => { ctx.moveTo(L * 0.12, T * 0.28); ctx.quadraticCurveTo(L * 0.02, T * 0.95, -L * 0.08, T * 0.8); ctx.quadraticCurveTo(-L * 0.02, T * 0.5, -L * 0.04, T * 0.3); });
+  ctx.fill();
+  blob(ctx, L * 0.3, -T * 0.12, 3.4, "#1f2d3a"); blob(ctx, L * 0.31, -T * 0.15, 1.1, "#fff");   // 눈
   if (whale) {
-    ctx.strokeStyle = "rgba(63,110,165,.35)"; ctx.lineWidth = 2; ctx.lineCap = "round";
-    for (let i = 0; i < 5; i++) path(ctx, () => { ctx.moveTo(w * 0.1, top + h * (0.3 + i * 0.09)); ctx.lineTo(w * 0.42, top + h * (0.3 + i * 0.09)); }); ctx.stroke();
-    ctx.fillStyle = c1; path(ctx, () => ctx.ellipse(-w * 0.55, top + h * 0.45, 18, 7, 0.9, 0, Math.PI * 2)); ctx.fill();   // 가슴지느러미
-    for (let i = 0; i < 4; i++) blob(ctx, Math.sin(t * 5 + i) * 5 + (i % 2 ? 7 : -7), top - 10 - i * 8, 3 - i * 0.4, "rgba(200,230,255,.9)");   // 분수
+    ctx.strokeStyle = "rgba(63,110,165,.35)"; ctx.lineWidth = 2; ctx.lineCap = "round";        // 배 주름
+    for (let i = 0; i < 4; i++) path(ctx, () => { ctx.moveTo(L * (0.36 - i * 0.1), T * 0.3); ctx.lineTo(L * (0.2 - i * 0.1), T * 0.36); }), ctx.stroke();
   } else {
-    ctx.fillStyle = c1;                                           // 등지느러미, 가슴지느러미
-    path(ctx, () => { ctx.moveTo(-w * 0.45, top + h * 0.42); ctx.lineTo(-w * 1.0, top + h * 0.6); ctx.lineTo(-w * 0.4, top + h * 0.64); }); ctx.fill();
-    path(ctx, () => { ctx.moveTo(w * 0.45, top + h * 0.5); ctx.lineTo(w * 0.95, top + h * 0.66); ctx.lineTo(w * 0.4, top + h * 0.7); }); ctx.fill();
-    ctx.strokeStyle = "#3d4a58"; ctx.lineWidth = 2.2;               // 입과 이빨
-    path(ctx, () => { ctx.moveTo(-w * 0.28, top + 30); ctx.quadraticCurveTo(0, top + 40, w * 0.3, top + 28); }); ctx.stroke();
+    ctx.strokeStyle = "rgba(61,74,88,.45)"; ctx.lineWidth = 1.6;                                 // 아가미
+    for (let i = 0; i < 3; i++) path(ctx, () => { ctx.moveTo(L * (0.17 - i * 0.04), -T * 0.18); ctx.quadraticCurveTo(L * (0.14 - i * 0.04), 0, L * (0.17 - i * 0.04), T * 0.16); }), ctx.stroke();
+    ctx.strokeStyle = "#3d4a58"; ctx.lineWidth = 2.2;                                           // 입과 이빨
+    path(ctx, () => { ctx.moveTo(L * 0.46, 7); ctx.quadraticCurveTo(L * 0.36, 12, L * 0.26, 8); }); ctx.stroke();
     ctx.fillStyle = "#fff";
-    for (let i = 0; i < 5; i++) path(ctx, () => { const x0 = -w * 0.22 + i * w * 0.11; ctx.moveTo(x0, top + 33 + Math.abs(i - 2) * -0.4); ctx.lineTo(x0 + 4, top + 33); ctx.lineTo(x0 + 2, top + 39); }), ctx.fill();
+    for (let i = 0; i < 4; i++) path(ctx, () => { const x0 = L * 0.28 + i * 5; ctx.moveTo(x0, 9); ctx.lineTo(x0 + 4, 9.5); ctx.lineTo(x0 + 2, 14); }), ctx.fill();
   }
-  ctx.restore();
-  splash(ctx, cx, seaY, t);
 }
 
-function bird(ctx, x, y, s, t, dir = -1) {                      // 날갯짓하는 새(기본 오른쪽, dir=-1이면 왼쪽을 본다)
-  const f = Math.sin(t * 10) * 0.8;
+const BIRD = { blue: ["#7b93ab", "#56708a", "#6b86a0"], dark: ["#4a4657", "#2e2b38", "#3b3847"] };   // 검은 새 떼는 도중에 줄을 바꾼다
+function bird(ctx, x, y, s, t, dir = -1, tone = "blue") {       // 날갯짓하는 새(기본 오른쪽, dir=-1이면 왼쪽을 본다)
+  const f = Math.sin(t * 10) * 0.8, [c1, c2, body] = BIRD[tone];
   ctx.save(); ctx.translate(x, y); ctx.scale(dir * s, s);
-  for (const [a, col] of [[-0.3, "#7b93ab"], [0, "#56708a"]]) {
+  for (const [a, col] of [[-0.3, c1], [0, c2]]) {
     ctx.save(); ctx.translate(-2, -3); ctx.rotate(-f * 0.9 + a); ctx.fillStyle = col;
     path(ctx, () => { ctx.moveTo(0, 0); ctx.quadraticCurveTo(-6, -16, -20, -12); ctx.quadraticCurveTo(-10, -4, 0, 3); }); ctx.fill(); ctx.restore();
   }
-  ctx.fillStyle = "#6b86a0"; path(ctx, () => ctx.ellipse(0, 1, 11, 6, 0, 0, Math.PI * 2)); ctx.fill();
+  ctx.fillStyle = body; path(ctx, () => ctx.ellipse(0, 1, 11, 6, 0, 0, Math.PI * 2)); ctx.fill();
   path(ctx, () => { ctx.moveTo(-9, 0); ctx.lineTo(-18, -2); ctx.lineTo(-17, 4); }); ctx.fill();         // 꼬리
-  blob(ctx, 10, -2, 5, "#6b86a0");
+  blob(ctx, 10, -2, 5, body);
   ctx.fillStyle = "#f4a63a"; path(ctx, () => { ctx.moveTo(14, -3); ctx.lineTo(20, -1); ctx.lineTo(14, 0); }); ctx.fill();
   blob(ctx, 11.5, -3.5, 1.2, "#1f2d3a");
   ctx.restore();
@@ -329,10 +345,10 @@ function practiceLabels(ctx, F, camX, sy, seaY) {
     if (ev.state !== "tele") continue;
     const breach = ev.kind === "shark" || ev.kind === "whale";
     if (breach) {                                                               // 뛰어오를 때 닿는 줄을 붉게 칠한다
-      const x = ev.x - camX, lanes = ev.peak > 285 ? [0, 1] : [0];
+      const x = ev.x - camX, l = ev.peak > 220 ? 1 : 0;
       ctx.fillStyle = "rgba(232,85,58,.22)";
-      for (const l of lanes) ctx.fillRect(x - 60, sy(LANE_Y[l]) - 48, 120, 96);
-      tag(`${ev.kind === "shark" ? "상어" : "고래"} 점프! 아래 줄이 위험`, x, sy(LANE_Y[0]) - 62);
+      ctx.fillRect(x - 60, sy(LANE_Y[l]) - 48, 120, 96);
+      tag(`${ev.kind === "shark" ? "상어" : "고래"} 점프! ${l ? "가운데" : "아래"} 줄이 위험`, x, sy(LANE_Y[l]) - 62);
     } else tag(`${ev.kind === "birds" ? "새" : "비행기"}: 이 줄이 위험!`, W - 150, sy(ev.y) - 36);
   }
   ctx.restore();
@@ -359,7 +375,7 @@ export function drawFlight(ctx, F) {
     puffCloud(ctx, x, 90 + (i % 3) * 75 + i * 10, 1 + (i % 2) * 0.35, "#ffffff", "#cfe9f5", 2);
   }
 
-  island(ctx, -camX - 140, 30, 340, { arch: 0, cactus: [[310, 1.1]], bushes: [[24, 1]] });
+  island(ctx, -camX - 140, START_TOP, 340, { arch: 0, cactus: [[310, 1.1]], bushes: [[24, 1]] });
   island(ctx, 0.9 * LEN - camX, ISLAND, 0.1 * LEN + 560, {
     cactus: [[60, 1], [640, 1.2]], bushes: [[110, 0.9], [600, 1]],
     houses: [[260, 58, 42], [350, 50, 36]], roof: C.teal,
@@ -390,9 +406,9 @@ export function drawFlight(ctx, F) {
   for (const ev of F.lv.events) {
     const breach = ev.kind === "shark" || ev.kind === "whale";
     if (ev.state === "tele") {
-      const k = 1 - ev.t / F.lv.warn;                                           // 0 → 1
+      const k = 1 - ev.t / ev.warn;                                             // 0 → 1
       if (breach) {
-        const x = ev.x - camX;
+        const x = ev.x + JUMP_SPAN - camX;                                       // 뛰어오를 자리
         if (x < -90 || x > W + 90) continue;
         ctx.fillStyle = `rgba(20,60,110,${0.2 + 0.3 * k})`;                      // 물속에 비치는 커다란 그림자
         path(ctx, () => ctx.ellipse(x, seaY + 9, 30 + 16 * k, 8, 0, 0, Math.PI * 2)); ctx.fill();
@@ -411,25 +427,35 @@ export function drawFlight(ctx, F) {
         lg.addColorStop(0, "rgba(232,85,58,0)"); lg.addColorStop(1, `rgba(232,85,58,${pulse + 0.16})`);
         ctx.fillStyle = lg; ctx.fillRect(SX + 70, y - 26, W - SX - 70, 52);
         ctx.save(); ctx.globalAlpha = 0.65 + 0.35 * Math.sin(F.t * 18);
-        path(ctx, () => { ctx.moveTo(W - 70, y); ctx.lineTo(W - 40, y - 20); ctx.lineTo(W - 40, y + 20); }); ctx.fillStyle = "#e8553a"; ctx.fill();
-        rr(ctx, W - 40, y - 20, 34, 40, 9, "#e8553a"); ctx.fillStyle = "#fff"; ctx.font = `24px ${SANS}`; ctx.textAlign = "center"; ctx.fillText("!", W - 23, y + 9);
+        path(ctx, () => { ctx.moveTo(W - 70, y); ctx.lineTo(W - 40, y - 20); ctx.lineTo(W - 40, y + 20); }); ctx.fillStyle = ev.dive != null ? "#3b3847" : "#e8553a"; ctx.fill();
+        const col = ev.dive != null ? "#3b3847" : "#e8553a";
+        rr(ctx, W - 40, y - 20, 34, 40, 9, col); ctx.fillStyle = "#fff"; ctx.font = `24px ${SANS}`; ctx.textAlign = "center"; ctx.fillText(ev.dive != null ? "?" : "!", W - 23, y + 9);
         ctx.restore();
       }
     } else if (ev.state === "act") {
       if (breach) {
-        const x = ev.x - camX;
-        if (x < -90 || x > W + 90 || ev.h < 6) continue;
-        const top = H - ev.h, t = F.t + ev.seed;
-        if (ev.t / 1.7 > 0.55) {                                                // 떨어질 때는 몸이 뒤집혀 꼬리가 위로 보인다
-          const h = Math.max(80, seaY - top + 26), cy = top + h / 2;
-          ctx.save(); ctx.translate(0, 2 * cy); ctx.scale(1, -1); creature(ctx, ev.kind, x, top, seaY, t); ctx.restore();
-        } else creature(ctx, ev.kind, x, top, seaY, t);
-        splash(ctx, x, seaY, t);
+        const x = ev.bx - camX, u = ev.t / JUMP_T, t = F.t + ev.seed;
+        if (x < -160 || x > W + 160) continue;
+        // 물을 박차고 나오는 자리와 다시 잠기는 자리에 물보라
+        if (u < 0.3) { ctx.save(); ctx.globalAlpha = 1 - u / 0.3; splash(ctx, ev.x + JUMP_SPAN - camX, seaY, t); ctx.restore(); }
+        if (u > 0.7) { ctx.save(); ctx.globalAlpha = Math.min(1, (u - 0.7) / 0.15); splash(ctx, ev.x - JUMP_SPAN - camX, seaY, t); ctx.restore(); }
+        ctx.save();
+        path(ctx, () => ctx.rect(-10, -10, W + 20, seaY + 14)); ctx.clip();      // 물속에 잠긴 부분은 가린다
+        ctx.translate(x, sy(ev.by)); ctx.scale(-1, 1);                          // 왼쪽을 보고, 진행 방향으로 기운다
+        ctx.rotate(Math.atan2(-ev.vy, -ev.vx));
+        jumper(ctx, ev.kind, t);
+        ctx.restore();
+        if (ev.kind === "whale" && u > 0.38 && u < 0.62) {                    // 정점 근처에서 물을 뿜는다
+          for (let i = 0; i < 4; i++) blob(ctx, x - 22 + Math.sin(t * 5 + i) * 5, sy(ev.by) - 28 - i * 9, 3.4 - i * 0.5, "rgba(200,230,255,.9)");
+        }
       } else {
         const x = ev.px - camX;
         if (x < -140 || x > W + 140) continue;
         const y = sy(ev.cy);
-        if (ev.kind === "birds") { bird(ctx, x, y, 1.15, F.t + ev.seed, -1); bird(ctx, x + 26, y - 16, 0.95, F.t + ev.seed + 1, -1); bird(ctx, x + 26, y + 16, 0.95, F.t + ev.seed + 2, -1); }
+        if (ev.kind === "birds") {
+          const tone = ev.dive != null ? "dark" : "blue";
+          bird(ctx, x, y, 1.15, F.t + ev.seed, -1, tone); bird(ctx, x + 26, y - 16, 0.95, F.t + ev.seed + 1, -1, tone); bird(ctx, x + 26, y + 16, 0.95, F.t + ev.seed + 2, -1, tone);
+        }
         else {
           const g = ctx.createLinearGradient(x, 0, x + 300, 0);                  // 비행운
           g.addColorStop(0, "rgba(255,255,255,.75)"); g.addColorStop(1, "rgba(255,255,255,0)");
@@ -492,10 +518,30 @@ export function drawFlight(ctx, F) {
     ctx.restore();
   }
 
+  // 속도선: 빨라질수록 진하고 길다
+  const sp = clamp((F.vx - 330) / 210, 0, 1);
+  if (F.mode === "fly" && sp > 0.05) {
+    ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${0.12 + 0.3 * sp})`; ctx.lineWidth = 2; ctx.lineCap = "round";
+    for (let i = 0; i < 14; i++) {
+      const y = 40 + ((i * 131) % (H - 110)), len = 40 + sp * 110 + (i % 3) * 20;
+      const x = W + 60 - ((F.x * 1.6 + i * 211) % (W + 200));
+      path(ctx, () => { ctx.moveTo(x, y); ctx.lineTo(x + len, y); }); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   if (F.practice) practiceLabels(ctx, F, camX, sy, seaY);
 
+  // 이륙하며 발을 뗀 자리에 흙먼지
+  if (F.lift > 0 && F.lift < 0.6) {
+    const k = F.lift / 0.6, x = F.takeX + 150 * 0.2 - camX;
+    ctx.save(); ctx.globalAlpha = 0.7 * (1 - k);
+    for (let i = 0; i < 5; i++) blob(ctx, x - 10 - i * 12 - k * 30 * (i % 2 ? 1 : 0.5), sy(START_TOP + GRASS) - 4 - k * (10 + i * 4), 6 + k * 8 - i, "#f4ead2");
+    ctx.restore();
+  }
+
   // 우체부 그림자
-  const groundY = F.x >= 0.9 * LEN ? ISLAND : 0;
+  const groundY = F.x >= 0.9 * LEN ? ISLAND + GRASS : F.x < 200 ? START_TOP + GRASS : 0;   // 섬 위에서는 잔디 표면에 그림자
   const alt = clamp((F.y - groundY) / 400, 0, 1);
   ctx.save();
   ctx.filter = "blur(4px)";
@@ -556,6 +602,13 @@ export function drawFlight(ctx, F) {
   }
   const orbsAll = F.lv.items.filter((it) => it.kind === "orb");
   if (orbsAll.length) orbsAll.forEach((it, i) => blob(ctx, rx + 9 + i * 15, 70, 5.5, it.taken ? "#ffd166" : "rgba(31,74,99,.22)"));
+  if (F.combo >= 2) {                                                               // 연속 회피: 방금 피했을 때 크게 튀어 오른다
+    const pop = F.comboT > 0.9 ? 1 + (F.comboT - 0.9) * 1.2 : 1;
+    ctx.save(); ctx.translate(rx + 600, 56); ctx.scale(pop, pop);
+    ctx.font = `bold 22px ${SANS}`; ctx.textAlign = "right"; ctx.fillStyle = F.combo >= 8 ? "#e8553a" : C.ink;
+    ctx.fillText(`${F.combo}연속 회피`, 0, 0);
+    ctx.restore();
+  }
 
   ctx.restore();
 

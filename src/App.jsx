@@ -11,7 +11,8 @@ import SetupScreen from "./components/SetupScreen.jsx";
 import NicknameScreen from "./components/NicknameScreen.jsx";
 import Icon from "./components/Icon.jsx";
 import ShareBox from "./components/ShareBox.jsx";
-import { createLetter, letterUrl } from "./api.js";
+import { NAME_TOKEN } from "./components/WriteScreen.jsx";
+import { createLetter, createLetters, letterUrl } from "./api.js";
 import { GRADE_NAME } from "./data/letters.js";
 import { DEFAULT_PROFILE, buildLetters, buildEpilogue } from "./data/profile.js";
 import { FLIGHT_BY_GAP, FLIGHT_COMMON, DELAYS, pickReply } from "./data/story.js";
@@ -66,14 +67,19 @@ export default function App() {
   const open = (l) => { setLetter(l); setScreen("read"); };
   const closeHowto = () => { setHowto(false); update((s) => ({ ...s, howtoSeen: true })); };
 
-  // 링크로 보낼 편지를 서버에 올린다. 성공하면 편지함 항목에 링크 정보(id, 회수용 secret)를 붙인다.
-  const upload = (entry) =>
-    createLetter({ from: entry.fromName, to: entry.to, body: entry.body, paper: entry.paper, grade: entry.grade, gap: entry.gap, expireDays: entry.expireDays })
-      .then((r) => {
-        update((s) => ({ ...s, mine: s.mine.map((m) => (m.id === entry.id ? { ...m, share: { id: r.id, secret: r.secret, expiresAt: r.expiresAt } } : m)) }));
-        return { status: "done", url: letterUrl(r.id) };
+  // 링크로 보낼 편지를 서버에 올린다(여러 사람이면 한 번에). 성공하면 편지함 항목마다 링크 정보(id, 회수용 secret)를 붙인다.
+  const upload = (entries) => {
+    const list = [].concat(entries);
+    const payload = (e) => ({ from: e.fromName, to: e.to, body: e.body, paper: e.paper, grade: e.grade, gap: e.gap, expireDays: e.expireDays });
+    const req = list.length === 1 ? createLetter(payload(list[0])).then((r) => [r]) : createLetters(list.map(payload)).then((r) => r.letters);
+    return req
+      .then((rs) => {
+        const byId = Object.fromEntries(list.map((e, i) => [e.id, rs[i]]));
+        update((s) => ({ ...s, mine: s.mine.map((m) => (byId[m.id] ? { ...m, share: { id: byId[m.id].id, secret: byId[m.id].secret, expiresAt: byId[m.id].expiresAt } } : m)) }));
+        return { status: "done", links: list.map((e, i) => ({ to: e.to, url: letterUrl(rs[i].id) })) };
       })
-      .catch((e) => ({ status: "error", code: e.status, entry }));
+      .catch((e) => ({ status: "error", code: e.status, entries: list }));
+  };
   const patchMine = (id, patch) => update((s) => ({ ...s, mine: s.mine.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
 
   const finish = ({ grade: g, orbs = 0 }) => {
@@ -89,8 +95,11 @@ export default function App() {
         entry.openAt = now + letter.delay; entry.party = letter.party; entry.hasVoice = !!letter.voice;
         if (letter.voice && !saveVoice(entry.id, letter.voice.url)) entry.hasVoice = false;   // 저장 공간이 모자라면 기본 노래로
       }
-      update((s) => ({ ...addMine(s, entry), orbExtra: (s.orbExtra || 0) + orbs }));
-      if (letter.mode === "link") { setShare({ status: "sending" }); upload(entry).then(setShare); }
+      // 링크로 여러 사람에게: 받는 사람마다 편지함 항목을 따로 만든다(읽음 확인·회수를 사람별로). {이름}은 그 사람 이름으로 바꾼다.
+      const tos = letter.mode === "link" && letter.tos?.length > 1 ? letter.tos : null;
+      const entries = tos ? tos.map((to, i) => ({ ...entry, id: `${entry.id}-${i}`, to, body: entry.body.split(NAME_TOKEN).join(to) })) : [{ ...entry, body: entry.body.split(NAME_TOKEN).join(entry.to) }];
+      update((s) => ({ ...entries.reduceRight(addMine, s), orbExtra: (s.orbExtra || 0) + orbs }));
+      if (letter.mode === "link") { setShare({ status: "sending" }); upload(entries).then(setShare); }
     } else {
       setEpilogue(letter.id === "l4" && !state.delivered.l4);
       update((s) => ({ ...recordDelivery(s, letter.id, g), orbs: { ...s.orbs, [letter.id]: Math.max(s.orbs?.[letter.id] || 0, orbs) } }));
@@ -99,11 +108,11 @@ export default function App() {
     setScreen("arrive");
   };
 
-  const submitMine = ({ mode, fromName, expireDays, to, gap, paper, delay, body, party, voice }) => {
+  const submitMine = ({ mode, fromName, expireDays, to, tos, gap, paper, delay, body, party, voice }) => {
     const id = `m${Date.now()}`;
     if (mode === "party" && "Notification" in window && Notification.permission === "default") Notification.requestPermission();   // 도착 알림
     setLetter({
-      id, custom: true, mode, party, voice, fromName, expireDays, from: "나", to, title: `${to}에게`, gap, paper, delay,
+      id, custom: true, mode, party, voice, fromName, expireDays, from: "나", to, tos, title: `${to}에게`, gap, paper, delay,
       body: body.split("\n"), reply: pickReply(gap, id),
       flight: { ...FLIGHT_BY_GAP[gap], ...FLIGHT_COMMON },
     });
@@ -257,13 +266,13 @@ export default function App() {
             <div className="route">{letter.from} → {letter.to}</div>
             {/* 서사 편지의 도착 반응은 등급과 무관하게 동일. 내 편지의 답장은 도착 날 편지함에서 열린다 */}
             <p>{letter.custom
-              ? (letter.mode === "party" ? `편지가 바람길에 올랐습니다. ${fmtWhen(Date.now() + letter.delay)}, 항구에서 파티가 열려요.` : letter.mode === "link" ? "편지가 바람길에 올랐습니다. 아래 링크를 받는 사람에게 전해 주세요." : `편지가 바람길에 올랐습니다. ${DELAYS.find((d) => d.ms === letter.delay)?.label.replace(" (체험용)", "")} 편지함에 도착합니다.`)
+              ? (letter.mode === "party" ? `편지가 바람길에 올랐습니다. ${fmtWhen(Date.now() + letter.delay)}, 항구에서 파티가 열려요.` : letter.mode === "link" ? `편지가 바람길에 올랐습니다. 아래 링크를 ${letter.tos?.length > 1 ? "사람마다 하나씩" : "받는 사람에게"} 전해 주세요.` : `편지가 바람길에 올랐습니다. ${DELAYS.find((d) => d.ms === letter.delay)?.label.replace(" (체험용)", "")} 편지함에 도착합니다.`)
               : letter.reply}</p>
             {!letter.custom && orbsGot >= 3 && letter.memory && <p className="memory">{letter.memory[0]}{orbsGot >= 7 && <> {letter.memory[1]}</>}</p>}
           </article>
           <div className={`grade ${grade}`}>{GRADE_NAME[grade]}</div>
           <div className="orbs-row" role="img" aria-label={`기억 구슬 ${orbsGot} / 9`}>{Array.from({ length: 9 }, (_, k) => <span key={k} className={k < orbsGot ? "on" : ""} />)}</div>
-          {letter.custom && letter.mode === "link" && <ShareBox share={share} onRetry={() => { const e = share?.entry; if (!e) return; setShare({ status: "sending" }); upload(e).then(setShare); }} />}
+          {letter.custom && letter.mode === "link" && <ShareBox share={share} onRetry={() => { const e = share?.entries; if (!e) return; setShare({ status: "sending" }); upload(e).then(setShare); }} />}
           <p className="sub">
             {letter.custom ? "우표가 한 장 모였습니다." : "바람길이 이어졌습니다. 부표가 사라지고 금빛 바람이 흐릅니다."}
           </p>

@@ -19,6 +19,7 @@ async function call(path, opt = {}) {
 }
 
 export const createLetter = (payload) => call("/api/letters", { method: "POST", body: JSON.stringify(payload) });
+export const createLetters = (letters) => call("/api/letters/batch", { method: "POST", body: JSON.stringify({ letters }) });
 export const getLetter = (id) => call(`/api/letters/${id}`);
 export const getStatus = (id, secret) => call(`/api/letters/${id}/status?secret=${encodeURIComponent(secret)}`);
 export const deleteLetter = (id, secret) => call(`/api/letters/${id}?secret=${encodeURIComponent(secret)}`, { method: "DELETE" });

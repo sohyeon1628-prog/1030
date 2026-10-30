@@ -12,13 +12,14 @@ export default function DialogueFlow({ nickname = "", onFocus, onPerson, onFinis
   const [about, setAbout] = useState("");
   const [people, setPeople] = useState([]);
   const [draft, setDraft] = useState({ relation: "", name: "", unsaid: "" });
+  const [bulk, setBulk] = useState([]);                  // 한 번에 고르기: 누른 순서가 곧 장의 순서
   const [hint, setHint] = useState("");
   const inputRef = useRef(null);
   const k = people.length;                              // 지금 정하는 사람의 번호(0~3)
 
   useEffect(() => { inputRef.current?.focus(); }, [step, draft.relation]);
   // 사람을 정하는 동안에는 카메라가 그 사람의 섬을 비춘다
-  useEffect(() => { onFocus(step === "who" || step === "unsaid" || step === "gap" ? k + 1 : 0); }, [step, k]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onFocus(step === "who" || step === "unsaid" || step === "gap" ? k + 1 : step === "bulk" ? Math.min(bulk.length + 1, 4) : 0); }, [step, k, bulk.length]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const me = name.trim() || "자네";
   const say = {
@@ -28,6 +29,7 @@ export default function DialogueFlow({ nickname = "", onFocus, onPerson, onFinis
     who: WHO_LINE[k],
     unsaid: `${draft.name}에게 못 한 말이 있나? 가장 가까운 걸 골라 보게.`,
     gap: `${draft.name}과(와) 마지막으로 이야기한 건 언제인가?`,
+    bulk: "네 사람을 한꺼번에 골라 보게. 누른 순서대로 편지를 전하네. 하고 싶은 말은 내가 대신 적어 두지. 나중에 이야기 노트에서 언제든 고칠 수 있네.",
   }[step];
 
   const submitName = () => { if (!name.trim()) { setHint("이름을 알려 주게."); return; } setHint(""); setStep("about"); };
@@ -41,11 +43,19 @@ export default function DialogueFlow({ nickname = "", onFocus, onPerson, onFinis
     if (next.length === 4) onFinish({ name: name.trim(), island: "노을섬", about: about.trim(), people: next });
     else setStep("who");
   };
+  // 한 번에 고르기: 관계만 고르면 이름·못 한 말·장면은 관계별 기본값으로 채운다
+  const toggleBulk = (r) => setBulk((b) => (b.includes(r) ? b.filter((x) => x !== r) : b.length < 4 ? [...b, r] : b));
+  const finishBulk = () => {
+    const next = bulk.map((relation) => makePerson({ relation, name: relation, unsaid: "", gap: "month" }));
+    next.forEach((p, i) => onPerson(i, p));
+    setPeople(next);
+    onFinish({ name: name.trim(), island: "노을섬", about: about.trim(), people: next });
+  };
   const key = (fn) => (e) => { if (e.key === "Enter") { e.preventDefault(); fn(); } };
 
   return (
     <div className="dialogue" role="dialog" aria-live="polite" aria-label="해무와의 대화">
-      <p className="speaker">우체부 해무 <small>{step === "name" || step === "about" || step === "bag" ? "" : `${Math.min(k + 1, 4)} / 4`}</small></p>
+      <p className="speaker">우체부 해무 <small>{step === "name" || step === "about" || step === "bag" ? "" : step === "bulk" ? `${bulk.length} / 4` : `${Math.min(k + 1, 4)} / 4`}</small></p>
       <p key={step + k} className="say fade">{say}</p>
 
       {step === "name" && (
@@ -83,6 +93,22 @@ export default function DialogueFlow({ nickname = "", onFocus, onPerson, onFinis
               <button className="btn" onClick={submitWho}>이 사람에게</button>
             </div>
           )}
+          {k === 0 && !draft.relation && <button className="btn ghost" onClick={() => setStep("bulk")}>네 사람 한 번에 고르기</button>}
+        </div>
+      )}
+
+      {step === "bulk" && (
+        <div className="reply col">
+          <div className="chips">
+            {RELATIONS.map((r) => {
+              const n = bulk.indexOf(r);
+              return <button key={r} className={`chip-btn big ${n >= 0 ? "on" : ""}`} disabled={n < 0 && bulk.length >= 4} onClick={() => toggleBulk(r)}>{n >= 0 ? `${n + 1}. ` : ""}{r}</button>;
+            })}
+          </div>
+          <div className="reply">
+            <button className="btn" disabled={bulk.length < 4} onClick={finishBulk}>{bulk.length < 4 ? `${4 - bulk.length}명 더 골라 주게` : "이 네 사람에게"}</button>
+            <button className="btn ghost" onClick={() => { setBulk([]); setStep("who"); }}>한 명씩 정하기</button>
+          </div>
         </div>
       )}
 

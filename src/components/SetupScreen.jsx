@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { RELATIONS, GAP_OPTIONS } from "../data/profile.js";
+import { RELATIONS, GAP_OPTIONS, RELATION_DEFAULTS } from "../data/profile.js";
 
 // 나의 이야기: 시작 전에 채운다. 예시 구성이 미리 채워져 있어 그대로 시작해도 된다.
 // lockedCount: 이미 전한 장의 수. 앞의 lockedCount명은 고칠 수 없고 순서도 바꿀 수 없다(이야기 노트에서 고치는 경우).
@@ -15,6 +15,19 @@ export default function SetupScreen({ initial, lockedCount = 0, editing = false,
     const people = p.people.slice(); [people[i], people[j]] = [people[j], people[i]];
     return { ...p, people };
   });
+
+  // 관계를 바꾸면 이름·섬·못 한 말·장면 중 손대지 않은(비었거나 이전 관계의 기본값인) 칸을 새 관계의 기본값으로 채운다
+  const pickRelation = (p, r) => {
+    const was = RELATION_DEFAULTS[p.relation] || {}, d = RELATION_DEFAULTS[r] || {};
+    const untouched = (v, def) => !v.trim() || v === def;
+    const name = untouched(p.name, p.relation) || RELATIONS.includes(p.name) ? r : p.name;
+    return {
+      relation: r, name,
+      island: untouched(p.island, `${p.name}의 섬`) ? `${name}의 섬` : p.island,
+      unsaid: untouched(p.unsaid, was.unsaid) ? d.unsaid : p.unsaid,
+      scene: untouched(p.scene, was.scene) ? d.scene : p.scene,
+    };
+  };
 
   const submit = () => {
     if (!pr.name.trim()) { setErr("내 이름을 적어 주세요. 해무가 그 이름을 부르며 가방을 넘겨요."); return; }
@@ -53,7 +66,7 @@ export default function SetupScreen({ initial, lockedCount = 0, editing = false,
                 <div className="chips">
                   {RELATIONS.map((r) => (
                     <button type="button" key={r} className={`chip-btn ${p.relation === r ? "on" : ""}`}
-                      onClick={() => setPerson(i, { relation: r, ...(r !== "직접 입력" && (!p.name.trim() || RELATIONS.includes(p.name)) ? { name: r } : {}) })}>{r}</button>
+                      onClick={() => setPerson(i, pickRelation(p, r))}>{r}</button>
                   ))}
                 </div>
                 {!locked && (
@@ -67,6 +80,8 @@ export default function SetupScreen({ initial, lockedCount = 0, editing = false,
                 <label>이름<input value={p.name} maxLength={10} onChange={(e) => setPerson(i, { name: e.target.value })} /></label>
                 <label>그 사람의 섬<input value={p.island} maxLength={12} placeholder={`${p.name || "○○"}의 섬`} onChange={(e) => setPerson(i, { island: e.target.value })} /></label>
               </div>
+              <details className="more">
+              <summary>못 한 말·장면 고치기 <small>관계에 맞게 미리 채워져 있어요</small></summary>
               <label>그 사람에게 못 한 말 <small>한두 문장. 편지의 첫 줄이 돼요</small>
                 <textarea rows={2} maxLength={120} value={p.unsaid} onChange={(e) => setPerson(i, { unsaid: e.target.value })} />
               </label>
@@ -80,6 +95,7 @@ export default function SetupScreen({ initial, lockedCount = 0, editing = false,
                   <input value={p.scene} maxLength={40} onChange={(e) => setPerson(i, { scene: e.target.value })} />
                 </label>
               </div>
+              </details>
             </fieldset>
           );
         })}

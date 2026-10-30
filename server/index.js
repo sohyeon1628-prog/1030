@@ -1,5 +1,6 @@
 // 나루 우체국 — 링크로 편지 보내기 서버. 외부 패키지 없이 Node만으로 동작한다.
 //   POST   /api/letters              편지를 올리고 링크용 id와 회수용 secret을 받는다
+//   POST   /api/letters/batch        같은 편지를 여러 사람에게: { letters: [편지…] } (최대 10통, 호출 제한은 한 번으로 센다)
 //   GET    /api/letters/:id          받는 사람이 편지를 연다(처음 열면 '읽음'으로 기록)
 //   GET    /api/letters/:id/status   보낸 사람이 읽혔는지 확인(secret 필요)
 //   DELETE /api/letters/:id          보낸 사람이 회수(secret 필요)
@@ -23,7 +24,7 @@ fs.mkdirSync(DATA, { recursive: true });
 const PAPERS = new Set(["cream", "mint", "coral", "star", "gold"]);
 const GRADES = new Set(["perfect", "safe", "rough"]);
 const DAY = 86400 * 1000;
-const MAX_BODY = 800, MAX_NAME = 20;
+const MAX_BODY = 800, MAX_NAME = 20, MAX_BATCH = 10;
 
 // ── 유틸 ──
 const file = (id) => path.join(DATA, `${id}.json`);
@@ -88,6 +89,21 @@ const authed = (l, secret) => {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 };
 
+// 요청 본문 → 저장할 편지와 회수용 secret. 비어 있으면 null
+function makeLetter(b) {
+  const body = clean(b?.body, MAX_BODY), to = clean(b?.to, MAX_NAME), from = clean(b?.from, MAX_NAME) || "누군가";
+  if (!body || !to) return null;
+  const days = Math.min(90, Math.max(1, Math.round(Number(b.expireDays) || 30)));
+  const secret = crypto.randomBytes(16).toString("hex");
+  const l = {
+    id: newId(), secretHash: sha(secret), from, to, body,
+    paper: PAPERS.has(b.paper) ? b.paper : "cream", grade: GRADES.has(b.grade) ? b.grade : "safe",
+    gap: [1, 2, 3].includes(b.gap) ? b.gap : 1,
+    createdAt: Date.now(), expiresAt: Date.now() + days * DAY, openedAt: null, opens: 0, reports: 0,
+  };
+  return { l, secret };
+}
+
 // ── API ──
 async function api(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);          // ["api","letters",id?,sub?]
@@ -96,19 +112,20 @@ async function api(req, res, url) {
 
   if (req.method === "POST" && !id) {                              // 올리기
     if (limited(ipOf(req))) return send(res, 429, { error: "too_many" });
-    const b = await readJson(req);
-    const body = clean(b.body, MAX_BODY), to = clean(b.to, MAX_NAME), from = clean(b.from, MAX_NAME) || "누군가";
-    if (!body || !to) return send(res, 400, { error: "empty" });
-    const days = Math.min(90, Math.max(1, Math.round(Number(b.expireDays) || 30)));
-    const secret = crypto.randomBytes(16).toString("hex");
-    const l = {
-      id: newId(), secretHash: sha(secret), from, to, body,
-      paper: PAPERS.has(b.paper) ? b.paper : "cream", grade: GRADES.has(b.grade) ? b.grade : "safe",
-      gap: [1, 2, 3].includes(b.gap) ? b.gap : 1,
-      createdAt: Date.now(), expiresAt: Date.now() + days * DAY, openedAt: null, opens: 0, reports: 0,
-    };
-    save(l);
-    return send(res, 201, { id: l.id, secret, expiresAt: l.expiresAt });
+    const made = makeLetter(await readJson(req));
+    if (!made) return send(res, 400, { error: "empty" });
+    save(made.l);
+    return send(res, 201, { id: made.l.id, secret: made.secret, expiresAt: made.l.expiresAt });
+  }
+  if (req.method === "POST" && id === "batch" && !sub) {          // 여러 사람에게 한 번에 올리기: 하나라도 비어 있으면 하나도 올리지 않는다
+    if (limited(ipOf(req))) return send(res, 429, { error: "too_many" });
+    const b = await readJson(req, 64 * 1024);
+    const list = Array.isArray(b.letters) ? b.letters : [];
+    if (!list.length || list.length > MAX_BATCH) return send(res, 400, { error: "count" });
+    const made = list.map(makeLetter);
+    if (made.some((m) => !m)) return send(res, 400, { error: "empty" });
+    made.forEach((m) => save(m.l));
+    return send(res, 201, { letters: made.map((m) => ({ id: m.l.id, secret: m.secret, expiresAt: m.l.expiresAt })) });
   }
 
   if (!id || !validId(id)) return send(res, 404, { error: "not_found" });
