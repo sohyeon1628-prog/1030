@@ -5,6 +5,7 @@ import Icon from "./Icon.jsx";
 import PartyScene from "./PartyScene.jsx";
 import { CONCEPTS, MAX_VOICE_SEC, partyOf } from "../party/config.js";
 import { startRecording } from "../party/audio.js";
+import { checkLetter } from "../api.js";
 
 const MAX = 500;
 export const MAX_TOS = 10;                 // 링크로 한 번에 보낼 수 있는 사람 수(서버의 MAX_BATCH와 같다)
@@ -20,6 +21,8 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
   const [scene, setScene] = useState(CONCEPTS[0].id);     // 도착 장면
   const [preview, setPreview] = useState(false);
   const [sending, setSending] = useState(false);
+  const [checking, setChecking] = useState(false);       // 글 검사 중
+  const [blockedMsg, setBlockedMsg] = useState("");      // 보낼 수 없는 표현이 있을 때 안내
   const [rec, setRec] = useState(null);                   // 녹음 중이면 { sec }
   const [voice, setVoice] = useState(null);               // 녹음한 목소리 { url, seconds }
   const [micErr, setMicErr] = useState("");
@@ -43,7 +46,12 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
     } catch { setRec(null); setMicErr("마이크를 쓸 수 없어요. 허용했는지 확인해 주세요. 녹음 없이도 기본 노래가 나와요."); }
   };
 
-  const send = () => {
+  const send = async () => {
+    setBlockedMsg(""); setChecking(true);
+    try {                                              // 서버가 막는 표현이 있는지 먼저 본다. 서버에 닿지 못하면 보낼 때 서버가 다시 검사한다.
+      const r = await checkLetter(names.join(", "), body.trim());
+      if (!r.ok) { setBlockedMsg("편지에 보낼 수 없는 표현이 들어 있어요. 내용을 고친 뒤 다시 보내 주세요."); return; }
+    } catch { /* 검사 서버에 못 닿아도 보내기는 계속한다 */ } finally { setChecking(false); }
     const payload = {
       mode: "link", tos: names, to: names.length > 1 ? `${names[0]} 외 ${names.length - 1}명` : names[0],
       fromName: myName || "누군가", expireDays: 30, paper, body: body.trim(), gap: 2, scene, voice,
@@ -122,8 +130,9 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
             <p className="wt-hint small">{micErr || `해무가 날아와 편지를 건네고, 내 목소리(선택, 최대 ${MAX_VOICE_SEC}초)에 맞춰 친구들이 노래해요. 녹음은 받는 사람에게 전해지고, 편지를 회수하거나 보관 기간(30일)이 지나면 함께 지워져요. 녹음이 없으면 기본 노래가 나와요.`}</p>
           </section>
 
+          {blockedMsg && <p className="wt-hint warn" role="alert">{blockedMsg}</p>}
           <div className="wt-send-btns">
-            <button className="btn wt-main" disabled={!ok} onClick={send}><Icon name="link" size={22} />링크로 보내기</button>
+            <button className="btn wt-main" disabled={!ok || checking} onClick={send}><Icon name="link" size={22} />링크로 보내기</button>
           </div>
         </div>
       </div>

@@ -25,6 +25,8 @@ export const uploadVoice = (dataUrl) => call("/api/voices", { method: "POST", bo
 export const voiceUrl = (id) => `${BASE}/api/voices/${id}`;
 // 받는 사람이 도착 영상을 보고 돌려보내는 반응(clap·fireworks·heart)
 export const reactLetter = (id, kind) => call(`/api/letters/${id}/react`, { method: "POST", body: JSON.stringify({ kind }) });
+// 보내기 전에 글을 미리 검사한다({ ok }). 막힌 글은 비행하기 전에 고칠 수 있다(보낼 때 서버가 다시 검사한다).
+export const checkLetter = (to, body) => call("/api/moderate", { method: "POST", body: JSON.stringify({ to, body }) });
 export const getLetter = (id) => call(`/api/letters/${id}`);
 export const getStatus = (id, secret) => call(`/api/letters/${id}/status?secret=${encodeURIComponent(secret)}`);
 export const deleteLetter = (id, secret) => call(`/api/letters/${id}?secret=${encodeURIComponent(secret)}`, { method: "DELETE" });

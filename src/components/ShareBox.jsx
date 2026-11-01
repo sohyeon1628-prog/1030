@@ -10,7 +10,10 @@ export default function ShareBox({ share, onRetry }) {
   if (share.status === "error") {
     return (
       <div className="sharebox error" role="alert">
-        <p>{share.code === 429 ? "한 시간에 보낼 수 있는 편지를 다 썼어요. 잠시 뒤에 다시 올려 주세요." : "서버에 닿지 못했어요. 편지는 편지함에 있어요."}</p>
+        <p>{share.code === 429 ? "한 시간에 보낼 수 있는 편지를 다 썼어요. 잠시 뒤에 다시 올려 주세요."
+          : share.code === 400 ? "편지에 보낼 수 없는 표현이 있어서 올리지 못했어요. 내용을 고쳐서 새 편지로 다시 써 주세요."
+          : share.code === 403 ? "이 기기에서는 편지를 보낼 수 없어요."
+          : "서버에 닿지 못했어요. 편지는 편지함에 있어요."}</p>
         <button className="btn" onClick={onRetry}><Icon name="send" size={18} /> 다시 올리기</button>
       </div>
     );

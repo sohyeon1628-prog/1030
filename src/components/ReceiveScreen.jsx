@@ -100,7 +100,7 @@ export default function ReceiveScreen({ id }) {
             </div>
             <div className="row">
               <a className="btn" href="/"><Icon name="pen" size={18} /> 나도 편지 쓰기</a>
-              <button className="btn ghost" disabled={reported} onClick={() => { reportLetter(id).catch(() => {}); setReported(true); }}>{reported ? "신고했어요" : "신고"}</button>
+              <button className="btn ghost" disabled={reported} onClick={() => { reportLetter(id).catch(() => {}); setReported(true); }}>{reported ? "신고했어요 · 확인할게요" : "신고"}</button>
             </div>
           </>
         )}
