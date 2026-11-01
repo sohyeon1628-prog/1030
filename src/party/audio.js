@@ -1,4 +1,6 @@
-// 파티 편지의 소리: 목소리 녹음, 저장/삭제, 재생과 소리 크기(입모양용). 기본 노래는 직접 만든 선율이다.
+import { isMuted } from "../game/audio.js";
+
+// 파티 편지의 소리: 목소리 녹음, 저장/삭제, 재생과 소리 크기(입모양용). 기본 노래는 직접 만든 선율이다. 기본 노래는 직접 만든 선율이다.
 const KEY = (id) => `wing-voice:${id}`;
 
 // 목소리는 편지와 같은 기기(브라우저)에만 저장된다. 쓴 사람이 언제든 삭제할 수 있다.
@@ -42,7 +44,10 @@ const BEAT = 0.42;
 
 export function createPlayer(url, onEnd) {
   const a = audioCtx(); a.resume?.();
-  const analyser = a.createAnalyser(); analyser.fftSize = 512; analyser.connect(a.destination);
+  // 지도의 스피커 버튼이 꺼져 있으면 소리는 내지 않는다. 입모양은 소리 크기를 읽어 움직이므로 분석기는 그대로 앞에 둔다.
+  const analyser = a.createAnalyser(); analyser.fftSize = 512;
+  const out = a.createGain(); out.gain.value = isMuted() ? 0 : 1;
+  analyser.connect(out); out.connect(a.destination);
   const buf = new Uint8Array(analyser.fftSize);
   let amp = 0, stopped = false, stopFn = () => {}, endTimer = null;
   const finish = () => { if (!stopped) { stopped = true; stopFn(); onEnd?.(); } };

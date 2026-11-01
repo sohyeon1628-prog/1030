@@ -5,7 +5,11 @@
 //   GET    /api/letters/:id/status   보낸 사람이 읽혔는지 확인(secret 필요)
 //   DELETE /api/letters/:id          보낸 사람이 회수(secret 필요)
 //   POST   /api/letters/:id/report   신고(3번 쌓이면 숨김)
-// 저장: DATA_DIR(기본 server/data)에 편지당 JSON 파일 하나. secret은 해시만 저장한다.
+//   POST   /api/letters/:id/react    받는 사람이 반응(박수·폭죽·하트) 하나를 돌려보낸다. 보낸 사람은 status로 본다
+//   POST   /api/voices               보낸 사람의 녹음(data URL, 최대 450KB)을 올리고 id를 받는다. 같은 녹음을 여러 편지가 함께 쓴다
+//   GET    /api/voices/:id           받는 사람이 도착 영상에서 재생할 녹음(그 녹음을 쓰는 편지가 살아 있을 때만)
+// 편지에는 도착 장면(scene: island·sea·sky)과 녹음 id(voice)가 붙는다. 받는 사람이 링크를 열면 그 장면에서 해무가 편지를 배달하는 영상이 나온다.
+// 저장: DATA_DIR(기본 server/data)에 편지당 JSON 파일 하나, 녹음은 voice-<id>.bin/.json. secret은 해시만 저장한다.
 // 실행: npm run server  (PORT, DATA_DIR, ALLOW_ORIGIN, TRUST_PROXY 환경변수)
 import http from "node:http";
 import fs from "node:fs";
@@ -25,6 +29,9 @@ const PAPERS = new Set(["cream", "mint", "coral", "star", "gold"]);
 const GRADES = new Set(["perfect", "safe", "rough"]);
 const DAY = 86400 * 1000;
 const MAX_BODY = 800, MAX_NAME = 20, MAX_BATCH = 10;
+const SCENES = new Set(["island", "sea", "sky"]);
+const REACTIONS = new Set(["clap", "fireworks", "heart"]);
+const MAX_VOICE = 450 * 1024;                                     // 녹음 한 개의 최대 크기(30초 녹음은 보통 120KB 안팎)
 
 // ── 유틸 ──
 const file = (id) => path.join(DATA, `${id}.json`);
@@ -35,6 +42,9 @@ const clean = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u0008\u00
 const load = (id) => { try { return JSON.parse(fs.readFileSync(file(id), "utf8")); } catch { return null; } };
 const save = (l) => { const tmp = file(l.id) + ".tmp"; fs.writeFileSync(tmp, JSON.stringify(l)); fs.renameSync(tmp, file(l.id)); };   // 쓰다 끊겨도 깨지지 않게
 const remove = (id) => { try { fs.unlinkSync(file(id)); } catch { /* 이미 없음 */ } };
+const vfile = (id, ext) => path.join(DATA, `voice-${id}.${ext}`);
+const loadVoiceMeta = (id) => { try { return JSON.parse(fs.readFileSync(vfile(id, "json"), "utf8")); } catch { return null; } };
+const liveLetter = (id) => { const l = load(id); return !!l && l.expiresAt > Date.now() && l.reports < 3; };
 
 function send(res, status, body, headers = {}) {
   const data = body == null ? "" : JSON.stringify(body);
@@ -76,9 +86,18 @@ function limited(ip, max = 8, windowMs = 3600 * 1000) {
 function purge() {
   const now = Date.now();
   for (const f of fs.readdirSync(DATA)) {
-    if (!f.endsWith(".json")) continue;
+    if (!f.endsWith(".json") || f.startsWith("voice-")) continue;
     const l = load(f.slice(0, -5));
     if (!l || l.expiresAt < now) remove(f.slice(0, -5));
+  }
+  // 녹음: 만료됐거나, 올린 지 한 시간이 지났는데 살아 있는 편지가 하나도 쓰지 않으면 지운다
+  for (const f of fs.readdirSync(DATA)) {
+    const m = /^voice-([A-Za-z0-9_-]{12})\.json$/.exec(f);
+    if (!m) continue;
+    const meta = loadVoiceMeta(m[1]);
+    if (!meta || meta.expiresAt < now || (now - meta.createdAt > 3600 * 1000 && !meta.letters.some(liveLetter))) {
+      for (const ext of ["json", "bin"]) { try { fs.unlinkSync(vfile(m[1], ext)); } catch { /* 이미 없음 */ } }
+    }
   }
 }
 purge(); setInterval(purge, 3600 * 1000).unref();
@@ -99,14 +118,50 @@ function makeLetter(b) {
     id: newId(), secretHash: sha(secret), from, to, body,
     paper: PAPERS.has(b.paper) ? b.paper : "cream", grade: GRADES.has(b.grade) ? b.grade : "safe",
     gap: [1, 2, 3].includes(b.gap) ? b.gap : 1,
+    scene: SCENES.has(b.scene) ? b.scene : "island",
+    voice: typeof b.voice === "string" && validId(b.voice) && loadVoiceMeta(b.voice) ? b.voice : null,   // 올려 둔 녹음의 id
     createdAt: Date.now(), expiresAt: Date.now() + days * DAY, openedAt: null, opens: 0, reports: 0,
   };
   return { l, secret };
 }
 
+// 편지를 저장하고, 쓰는 녹음에 이 편지를 연결한다(녹음은 그 편지가 살아 있는 동안만 재생된다)
+function saveLetter(l) {
+  save(l);
+  if (!l.voice) return;
+  const meta = loadVoiceMeta(l.voice);
+  if (meta) { meta.letters.push(l.id); fs.writeFileSync(vfile(l.voice, "json"), JSON.stringify(meta)); }
+}
+
+// ── 녹음 ──
+async function voices(req, res, parts) {
+  const id = parts[2];
+  if (req.method === "POST" && !id) {
+    if (limited(ipOf(req) + ":voice", 12)) return send(res, 429, { error: "too_many" });
+    const b = await readJson(req, 700 * 1024);
+    const m = /^data:(audio\/(?:webm|mp4|ogg|mpeg|aac|x-m4a))(?:;[^,;]*)*;base64,([A-Za-z0-9+/=]+)$/.exec(typeof b.data === "string" ? b.data : "");
+    if (!m) return send(res, 400, { error: "bad_voice" });
+    const buf = Buffer.from(m[2], "base64");
+    if (!buf.length || buf.length > MAX_VOICE) return send(res, 413, { error: "too_large" });
+    const vid = newId();
+    fs.writeFileSync(vfile(vid, "bin"), buf);
+    fs.writeFileSync(vfile(vid, "json"), JSON.stringify({ id: vid, mime: m[1], createdAt: Date.now(), expiresAt: Date.now() + 90 * DAY, letters: [] }));
+    return send(res, 201, { id: vid });
+  }
+  if (req.method === "GET" && id && validId(id)) {
+    const meta = loadVoiceMeta(id);
+    if (!meta || !meta.letters.some(liveLetter)) return send(res, 404, { error: "not_found" });
+    let buf; try { buf = fs.readFileSync(vfile(id, "bin")); } catch { return send(res, 404, { error: "not_found" }); }
+    res.writeHead(200, { "Content-Type": meta.mime, "Content-Length": buf.length, "Cache-Control": "private, max-age=3600" });
+    return res.end(buf);
+  }
+  return send(res, 404, { error: "not_found" });
+}
+
 // ── API ──
 async function api(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);          // ["api","letters",id?,sub?]
+  if (parts[1] === "voices") return voices(req, res, parts);
   if (parts[1] !== "letters") return send(res, 404, { error: "not_found" });
   const id = parts[2], sub = parts[3];
 
@@ -114,7 +169,7 @@ async function api(req, res, url) {
     if (limited(ipOf(req))) return send(res, 429, { error: "too_many" });
     const made = makeLetter(await readJson(req));
     if (!made) return send(res, 400, { error: "empty" });
-    save(made.l);
+    saveLetter(made.l);
     return send(res, 201, { id: made.l.id, secret: made.secret, expiresAt: made.l.expiresAt });
   }
   if (req.method === "POST" && id === "batch" && !sub) {          // 여러 사람에게 한 번에 올리기: 하나라도 비어 있으면 하나도 올리지 않는다
@@ -124,7 +179,7 @@ async function api(req, res, url) {
     if (!list.length || list.length > MAX_BATCH) return send(res, 400, { error: "count" });
     const made = list.map(makeLetter);
     if (made.some((m) => !m)) return send(res, 400, { error: "empty" });
-    made.forEach((m) => save(m.l));
+    made.forEach((m) => saveLetter(m.l));
     return send(res, 201, { letters: made.map((m) => ({ id: m.l.id, secret: m.secret, expiresAt: m.l.expiresAt })) });
   }
 
@@ -137,15 +192,22 @@ async function api(req, res, url) {
     if (l.reports >= 3) return send(res, 410, { error: "hidden" });
     if (!l.openedAt) l.openedAt = Date.now();
     l.opens++; save(l);
-    return send(res, 200, { from: l.from, to: l.to, body: l.body, paper: l.paper, grade: l.grade, gap: l.gap, createdAt: l.createdAt, expiresAt: l.expiresAt });
+    return send(res, 200, { from: l.from, to: l.to, body: l.body, paper: l.paper, grade: l.grade, gap: l.gap, scene: l.scene || "island", voice: l.voice || null, createdAt: l.createdAt, expiresAt: l.expiresAt });
   }
   if (req.method === "GET" && sub === "status") {                  // 보낸 사람이 확인
     if (!authed(l, url.searchParams.get("secret"))) return send(res, 403, { error: "forbidden" });
-    return send(res, 200, { opened: !!l.openedAt, openedAt: l.openedAt, opens: l.opens, expiresAt: l.expiresAt });
+    return send(res, 200, { opened: !!l.openedAt, openedAt: l.openedAt, opens: l.opens, reaction: l.reaction || null, expiresAt: l.expiresAt });
   }
   if (req.method === "DELETE" && !sub) {                           // 회수
     if (!authed(l, url.searchParams.get("secret"))) return send(res, 403, { error: "forbidden" });
     remove(id); return send(res, 200, { ok: true });
+  }
+  if (req.method === "POST" && sub === "react") {                  // 받는 사람이 반응을 돌려보낸다(하나만, 바꿀 수 있다)
+    if (limited(ipOf(req) + ":react", 30)) return send(res, 429, { error: "too_many" });
+    const b = await readJson(req);
+    if (!REACTIONS.has(b.kind) || l.reports >= 3) return send(res, 400, { error: "bad_reaction" });
+    l.reaction = b.kind; l.reactedAt = Date.now(); save(l);
+    return send(res, 200, { ok: true });
   }
   if (req.method === "POST" && sub === "report") {                 // 신고
     if (limited(ipOf(req) + ":report", 20)) return send(res, 429, { error: "too_many" });

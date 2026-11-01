@@ -1,170 +1,140 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { GAPS, DELAYS, PAPERS } from "../data/story.js";
+import { PAPERS } from "../data/story.js";
 import Icon from "./Icon.jsx";
-import PartyEditor from "./PartyEditor.jsx";
 import PartyScene from "./PartyScene.jsx";
-import { DEFAULT_PARTY, QUICK_WHEN, MIN_FUTURE_MS, fmtWhen } from "../party/config.js";
-
-const toLocal = (t) => { const d = new Date(t - new Date(t).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+import { CONCEPTS, MAX_VOICE_SEC, partyOf } from "../party/config.js";
+import { startRecording } from "../party/audio.js";
 
 const MAX = 500;
 export const MAX_TOS = 10;                 // 링크로 한 번에 보낼 수 있는 사람 수(서버의 MAX_BATCH와 같다)
 export const NAME_TOKEN = "{이름}";        // 본문에 쓰면 받는 사람마다 그 사람 이름으로 바뀐다
-const KEEP = [{ days: 7, label: "7일" }, { days: 30, label: "30일" }, { days: 90, label: "90일" }];
 
-// 내 편지 쓰기: 보낼 방법(미래의 나 / 링크로 보내기), 받는 사람, 편지지, 본문
+// 내 편지 쓰기: 화면 하나. 편지지에 받는 사람과 내용을 쓰고, 도착 장면(섬 위·바닷속·하늘 위)과 내 목소리(선택)를 고른 뒤 링크로 보낸다.
+// 받는 사람이 링크를 열면 고른 장면에서 해무가 편지를 배달하는 영상이 나오고, 녹음한 목소리가 노래로 흐르고, 끝나면 편지가 열린다.
+// 여러 명은 쉼표로 나눠 적으면 사람마다 링크가 따로 만들어진다. 보내는 사람 이름은 닉네임, 보관 기간(30일)은 기본값이다.
 export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBack }) {
-  const [mode, setMode] = useState("future");        // future: 정한 날 내 편지함으로 / link: 링크를 받은 사람에게
   const [to, setTo] = useState("");
-  const [tos, setTos] = useState([]);                // 링크로 보낼 때 받는 사람 목록
-  const [fromName, setFromName] = useState(myName);
-  const [expireDays, setExpireDays] = useState(30);
-  const [gap, setGap] = useState(1);
-  const [paper, setPaper] = useState("cream");
-  const [delay, setDelay] = useState(DELAYS[1].ms);
   const [body, setBody] = useState("");
-  const [party, setParty] = useState(DEFAULT_PARTY);
-  const [voice, setVoice] = useState(null);
-  const [consent, setConsent] = useState(false);
+  const [paper, setPaper] = useState("cream");
+  const [scene, setScene] = useState(CONCEPTS[0].id);     // 도착 장면
   const [preview, setPreview] = useState(false);
-  const [openAt, setOpenAt] = useState(() => Date.now() + QUICK_WHEN[0].ms);
-  const link = mode === "link", pty = mode === "party";
-  const okWhen = !pty || openAt >= Date.now() + MIN_FUTURE_MS - 5000;
-  // 링크로 보낼 때는 받는 사람을 여러 명 넣을 수 있다. 입력칸에 남은 이름도 함께 보낸다.
-  const allTos = link ? [...new Set([...tos, to.trim()].filter(Boolean))].slice(0, MAX_TOS) : [to.trim()].filter(Boolean);
-  const addTo = () => {
-    const names = to.split(",").map((s) => s.trim()).filter(Boolean);
-    if (names.length) setTos((t) => [...new Set([...t, ...names])].slice(0, MAX_TOS));
-    setTo("");
-  };
-  const ok = allTos.length && body.trim() && (!link || fromName.trim()) && okWhen;
+  const [sending, setSending] = useState(false);
+  const [rec, setRec] = useState(null);                   // 녹음 중이면 { sec }
+  const [voice, setVoice] = useState(null);               // 녹음한 목소리 { url, seconds }
+  const [micErr, setMicErr] = useState("");
+  const stage = useRef(null);
+  const ctl = useRef(null);
+  useEffect(() => () => ctl.current?.cancel(), []);
+
+  const names = [...new Set(to.split(/[,，、]/).map((x) => x.trim()).filter(Boolean))].slice(0, MAX_TOS);
+  const ok = names.length > 0 && !!body.trim();
   const color = PAPERS.find((p) => p.id === paper).color;
+  const picked = CONCEPTS.find((c) => c.id === scene);
+
+  const record = async () => {
+    setMicErr("");
+    try {
+      ctl.current = await startRecording(MAX_VOICE_SEC, (sec) => setRec({ sec }));
+      setRec({ sec: 0 });
+      const r = await ctl.current.done;
+      setRec(null); ctl.current = null;
+      if (r) setVoice(r);
+    } catch { setRec(null); setMicErr("마이크를 쓸 수 없어요. 허용했는지 확인해 주세요. 녹음 없이도 기본 노래가 나와요."); }
+  };
+
+  const send = () => {
+    const payload = {
+      mode: "link", tos: names, to: names.length > 1 ? `${names[0]} 외 ${names.length - 1}명` : names[0],
+      fromName: myName || "누군가", expireDays: 30, paper, body: body.trim(), gap: 2, scene, voice,
+    };
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (calm) return onSubmit(payload);
+    setSending(true);                                  // 봉투가 날아가는 연출을 보여 준 뒤 보낸다
+    setTimeout(() => onSubmit(payload), 1300);
+  };
+
+  // 마우스를 따라 종이가 살짝 기운다(터치에서는 손가락을 따라간다)
+  const tilt = (e) => {
+    const r = stage.current?.getBoundingClientRect(); if (!r) return;
+    const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+    stage.current.style.setProperty("--ry", `${(x * 8).toFixed(2)}deg`);
+    stage.current.style.setProperty("--rx", `${(-y * 6).toFixed(2)}deg`);
+  };
 
   return (
-    <main className="screen">
-      <div className="form">
-        <h2>내 편지 쓰기</h2>
+    <main className="screen wt">
+      <div className="wt-top">
+        <button className="wt-back" onClick={onBack} aria-label="지도로 돌아가기">‹</button>
+        <h2 className="wt-title">편지 쓰기</h2>
+        <span className="wt-back ghost" aria-hidden="true" />
+      </div>
 
-        <fieldset>
-          <legend>어디로 보낼까요?</legend>
-          <label className={`chip big ${!link ? "on" : ""}`}>
-            <input type="radio" name="mode" checked={!link} onChange={() => setMode("future")} />
-            <Icon name="mail" size={18} /> 미래의 나에게<small>정한 날 내 편지함으로</small>
-          </label>
-          <label className={`chip big ${link ? "on" : ""}`}>
-            <input type="radio" name="mode" checked={link} onChange={() => setMode("link")} />
-            <Icon name="link" size={18} /> 링크로 보내기<small>받은 사람이 열어 봐요</small>
-          </label>
-          <label className={`chip big ${pty ? "on" : ""}`}>
-            <input type="radio" name="mode" checked={pty} onChange={() => setMode("party")} />
-            <Icon name="party" size={18} /> 파티 편지<small>정한 날 항구에서 파티가 열려요</small>
-          </label>
-        </fieldset>
-        {link && <p className="sub">링크를 가진 사람만 편지를 볼 수 있어요. 보관 기간이 지나면 사라지고, 편지함에서 언제든 거두어 올 수 있어요.</p>}
-
-        {link ? (
-          <label>누구에게 보낼까요? <small>여러 명이면 한 명씩 추가하세요. 한 번 날면 사람마다 링크가 따로 만들어져요 (최대 {MAX_TOS}명)</small>
-            {tos.length > 0 && (
-              <span className="chips">
-                {tos.map((n) => <button type="button" key={n} className="chip-btn on" aria-label={`${n} 빼기`} onClick={() => setTos((t) => t.filter((x) => x !== n))}>{n} ✕</button>)}
-              </span>
-            )}
-            <span className="to-row">
-              <input value={to} maxLength={60} placeholder={tos.length ? "한 명 더 (예: 도윤)" : "예: 엄마, 도윤, 하준"} disabled={tos.length >= MAX_TOS}
-                onChange={(e) => setTo(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTo(); } }} />
-              <button type="button" className="btn ghost" disabled={!to.trim() || tos.length >= MAX_TOS} onClick={addTo}>추가</button>
-            </span>
-          </label>
-        ) : (
-          <label>누구에게 하고 싶은 말인가요?
-            <input value={to} maxLength={20} placeholder="예: 엄마, 오랜 친구, 열일곱의 나" onChange={(e) => setTo(e.target.value)} />
-          </label>
-        )}
-
-        {link && (
-          <>
-            <label>보내는 사람 이름 <small>받는 사람에게 보이는 이름이에요</small>
-              <input value={fromName} maxLength={20} placeholder="예: 소라" onChange={(e) => setFromName(e.target.value)} />
+      <div className="wt-stage" ref={stage} onPointerMove={tilt}>
+        <div className="wt-tilt">
+          <article className="paper wt-paper" style={{ backgroundColor: color }}>
+            <label className="wt-dear">
+              <input value={to} maxLength={60} autoFocus placeholder="누구에게" aria-label="받는 사람 (여러 명은 쉼표로)" onChange={(e) => setTo(e.target.value)} />
+              <span>에게</span>
             </label>
-            <fieldset>
-              <legend>얼마나 보관할까요?</legend>
-              {KEEP.map((k) => (
-                <label key={k.days} className={`chip ${expireDays === k.days ? "on" : ""}`}>
-                  <input type="radio" name="keep" checked={expireDays === k.days} onChange={() => setExpireDays(k.days)} />{k.label}
-                </label>
+            <textarea value={body} maxLength={MAX} placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." aria-label="편지 내용" onChange={(e) => setBody(e.target.value)} />
+            <div className="wt-foot"><span>{names.length > 1 ? `${names.length}명에게 · ` : ""}{body.length} / {MAX}</span></div>
+          </article>
+
+          <div className="wt-papers" role="radiogroup" aria-label="편지지">
+            {PAPERS.map((p) => {
+              const locked = p.need > orbsTotal;           // 기억 구슬을 충분히 모아야 열린다
+              return (
+                <button key={p.id} role="radio" aria-checked={paper === p.id} disabled={locked} className={`wt-swatch ${paper === p.id ? "on" : ""} ${locked ? "locked" : ""}`}
+                  style={{ "--c": p.color }} onClick={() => setPaper(p.id)} title={locked ? `${p.label} 편지지 · 기억 구슬 ${p.need}개` : `${p.label} 편지지`} aria-label={`${p.label} 편지지${locked ? `, 기억 구슬 ${p.need}개 필요` : ""}`}>
+                  {locked && <span className="need"><Icon name="lock" size={12} />{p.need}</span>}
+                </button>
+              );
+            })}
+          </div>
+          {names.length > 1 && <p className="wt-hint">본문에 {NAME_TOKEN}이라고 쓰면 받는 사람마다 그 사람 이름으로 바뀌어요</p>}
+
+          {/* 도착 장면과 내 목소리: 받는 사람이 링크를 열면 이 장면에서 해무가 편지를 배달한다 */}
+          <section className="wt-arrival" aria-label="도착 연출">
+            <h3>받는 사람에게 이렇게 도착해요</h3>
+            <div className="wt-scenes" role="radiogroup" aria-label="도착 장면">
+              {CONCEPTS.map((c) => (
+                <button key={c.id} role="radio" aria-checked={scene === c.id} className={`wt-scene ${scene === c.id ? "on" : ""}`} style={{ "--tone": c.tone }} onClick={() => setScene(c.id)}>
+                  <span className="ico"><Icon name="party" size={20} /></span>
+                  <b>{c.label.replace(" 파티", "")}</b><small>{c.hint}</small>
+                </button>
               ))}
-            </fieldset>
-          </>
-        )}
+            </div>
+            <div className="wt-voice">
+              {!rec ? (
+                <button className="btn ghost" onClick={record}><Icon name="mic" size={18} />{voice ? "다시 녹음하기" : "내 목소리 녹음하기"}</button>
+              ) : (
+                <button className="btn rec" onClick={() => ctl.current?.stop()}><Icon name="stop" size={18} />{rec.sec.toFixed(0)}초 · 멈추기</button>
+              )}
+              {voice && !rec && (
+                <>
+                  <span className="tag ready">{voice.seconds.toFixed(0)}초 녹음됨</span>
+                  <button className="icon-act danger" onClick={() => setVoice(null)} aria-label="녹음 지우기" title="녹음 지우기"><Icon name="trash" size={18} /></button>
+                </>
+              )}
+              <button className="btn ghost" onClick={() => setPreview(true)}><Icon name="play" size={18} />미리 보기</button>
+            </div>
+            <p className="wt-hint small">{micErr || `해무가 날아와 편지를 건네고, 내 목소리(선택, 최대 ${MAX_VOICE_SEC}초)에 맞춰 친구들이 노래해요. 녹음은 받는 사람에게 전해지고, 편지를 회수하거나 보관 기간(30일)이 지나면 함께 지워져요. 녹음이 없으면 기본 노래가 나와요.`}</p>
+          </section>
 
-        {!pty && <fieldset>
-          <legend>이 사람과 마지막으로 이야기한 건 언제인가요?</legend>
-          {GAPS.map((g) => (
-            <label key={g.value} className={`chip ${gap === g.value ? "on" : ""}`}>
-              <input type="radio" name="gap" checked={gap === g.value} onChange={() => setGap(g.value)} />
-              {g.label}<small>{g.hint}</small>
-            </label>
-          ))}
-        </fieldset>}
-
-        <fieldset>
-          <legend>편지지</legend>
-          {PAPERS.map((p) => {
-            const locked = p.need > orbsTotal;           // 기억 구슬을 충분히 모아야 열린다
-            return (
-              <label key={p.id} className={`chip ${paper === p.id ? "on" : ""} ${locked ? "locked" : ""}`} title={locked ? `기억 구슬 ${p.need}개` : p.label}>
-                <input type="radio" name="paper" disabled={locked} checked={paper === p.id} onChange={() => setPaper(p.id)} />
-                <i className="sw" style={{ background: p.color }} />{p.label}
-                {locked && <small className="need"><Icon name="lock" size={12} />{p.need}</small>}
-              </label>
-            );
-          })}
-        </fieldset>
-
-        {pty && (
-          <>
-            <fieldset>
-              <legend>언제 도착할까요?</legend>
-              {QUICK_WHEN.map((q) => (
-                <button key={q.label} type="button" className="chip" onClick={() => setOpenAt(Date.now() + q.ms)}>{q.label}</button>
-              ))}
-              <input type="datetime-local" value={toLocal(openAt)} min={toLocal(Date.now() + MIN_FUTURE_MS)}
-                onChange={(e) => { const t = new Date(e.target.value).getTime(); if (t) setOpenAt(t); }} />
-              {!okWhen ? <p className="sub warn">도착 시각은 지금보다 1분 이상 뒤여야 해요.</p> : <p className="sub">{fmtWhen(openAt)}에 도착해요. 파티 편지는 언제나 가벼운 바람 속을 날아요.</p>}
-            </fieldset>
-            <PartyEditor party={party} onParty={setParty} voice={voice} onVoice={setVoice} consent={consent} onConsent={setConsent} onPreview={() => setPreview(true)} />
-          </>
-        )}
-
-        {!link && !pty && (
-          <fieldset>
-            <legend>언제 도착할까요?</legend>
-            {DELAYS.map((d) => (
-              <label key={d.ms} className={`chip ${delay === d.ms ? "on" : ""}`}>
-                <input type="radio" name="delay" checked={delay === d.ms} onChange={() => setDelay(d.ms)} />
-                {d.label}
-              </label>
-            ))}
-          </fieldset>
-        )}
-
-        <label>편지
-          <textarea style={{ background: color }} value={body} maxLength={MAX} rows={8}
-            placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." onChange={(e) => setBody(e.target.value)} />
-          <small className="count">{body.length} / {MAX}</small>
-          {link && allTos.length > 1 && <small>본문에 {NAME_TOKEN}이라고 쓰면 받는 사람마다 그 사람 이름으로 바뀌어요.</small>}
-        </label>
-
-        <div className="row">
-          <button className="btn" disabled={!ok}
-            onClick={() => onSubmit({ mode, tos: allTos, to: allTos.length > 1 ? `${allTos[0]} 외 ${allTos.length - 1}명` : allTos[0], fromName: fromName.trim(), expireDays, gap: pty ? 1 : gap, paper, delay: pty ? openAt - Date.now() : delay, body: body.trim(), party: pty ? party : undefined, voice: pty && consent ? voice : null })}>
-            부치러 가기
-          </button>
-          <button className="btn ghost" onClick={onBack}>돌아가기</button>
+          <div className="wt-send-btns">
+            <button className="btn wt-main" disabled={!ok} onClick={send}><Icon name="link" size={22} />링크로 보내기</button>
+          </div>
         </div>
       </div>
-      {preview && createPortal(<div className="party-overlay"><PartyScene preview party={party} voiceUrl={consent ? voice?.url : null} from={fromName || myName} onClose={() => setPreview(false)} /></div>, document.body)}
+
+      {sending && (
+        <div className="wt-send" role="status" aria-live="polite">
+          <div className="wt-envelope"><Icon name="mail" size={84} /></div>
+          <p>편지를 부치는 중…</p>
+        </div>
+      )}
+      {preview && createPortal(<div className="party-overlay"><PartyScene preview intro party={partyOf({ ...picked, banner: names[0] ? `${names[0]}에게` : picked.banner })} voiceUrl={voice?.url ?? null} from={myName} onClose={() => setPreview(false)} /></div>, document.body)}
     </main>
   );
 }

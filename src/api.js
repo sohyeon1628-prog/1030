@@ -2,9 +2,9 @@
 const BASE = import.meta.env.VITE_API_BASE || "";
 const PUBLIC = import.meta.env.VITE_PUBLIC_URL || (typeof location !== "undefined" ? location.origin : "");
 
-async function call(path, opt = {}) {
+async function call(path, opt = {}, timeout = 8000) {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 8000);
+  const timer = setTimeout(() => ctl.abort(), timeout);
   try {
     const r = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opt, signal: ctl.signal });
     const data = await r.json().catch(() => null);
@@ -20,6 +20,11 @@ async function call(path, opt = {}) {
 
 export const createLetter = (payload) => call("/api/letters", { method: "POST", body: JSON.stringify(payload) });
 export const createLetters = (letters) => call("/api/letters/batch", { method: "POST", body: JSON.stringify({ letters }) });
+// 보낸 사람의 녹음(data URL)을 올리고 id를 받는다. 같은 녹음을 여러 편지가 함께 쓴다.
+export const uploadVoice = (dataUrl) => call("/api/voices", { method: "POST", body: JSON.stringify({ data: dataUrl }) }, 20000);
+export const voiceUrl = (id) => `${BASE}/api/voices/${id}`;
+// 받는 사람이 도착 영상을 보고 돌려보내는 반응(clap·fireworks·heart)
+export const reactLetter = (id, kind) => call(`/api/letters/${id}/react`, { method: "POST", body: JSON.stringify({ kind }) });
 export const getLetter = (id) => call(`/api/letters/${id}`);
 export const getStatus = (id, secret) => call(`/api/letters/${id}/status?secret=${encodeURIComponent(secret)}`);
 export const deleteLetter = (id, secret) => call(`/api/letters/${id}?secret=${encodeURIComponent(secret)}`, { method: "DELETE" });

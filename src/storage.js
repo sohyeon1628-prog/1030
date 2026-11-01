@@ -3,11 +3,10 @@ import { GRADE_RANK } from "./data/letters.js";
 const KEY = "last-postal-wing:v1";
 const EMPTY = {
   delivered: {}, grade: {}, tutorialSeen: false, muted: false,
-  storySeen: false,   // 프롤로그를 봤는지
+  bottleSeen: false,  // 첫 편지를 보낸 뒤의 병 편지 에필로그를 봤는지
+  storySeen: false,   // 오프닝(해무 이야기)을 봤는지
   howtoSeen: false,   // 게임 방법 안내를 봤는지
-  nickname: "",       // 닉네임(로그인이 생기기 전까지 쓰는 이름)
-  profile: null,      // 나의 이야기(이름, 섬, 사랑하는 네 사람…). null이면 예시 구성
-  setupDone: false,   // 나의 이야기를 채웠는지
+  nickname: "",       // 닉네임(로그인이 생기기 전까지 쓰는 이름). 해무가 부르는 이름이다
   mine: [],           // 내가 쓴 편지(미래의 나에게)
   orbs: {},           // 편지(장)별로 가장 많이 모은 기억 구슬 수
   orbExtra: 0,        // 내 편지를 날리며 모은 구슬

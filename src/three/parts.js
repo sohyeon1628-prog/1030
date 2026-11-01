@@ -12,6 +12,9 @@ export const ISLANDS = [
   { name: "먼바다섬", x: 4.5, z: 13 },
 ];
 export const CENTER = new THREE.Vector3(4.5, 0, 6.5);
+// 편지섬: 내 편지를 쓰는 곳. 이야기 섬 네 개와 따로 두고(ISLANDS에 넣으면 오프닝·안개 계산이 달라진다), 네 통을 모두 전하면 열린다.
+// 마지막 섬(먼바다섬) 곁에 둬서 이야기가 끝난 뒤의 다음 행선지처럼 보이게 한다.
+export const POST_ISLAND = { name: "편지섬", x: -0.6, z: 13.2 };
 
 export const mat = (hex, o = {}) => new THREE.MeshStandardMaterial({ color: hex, roughness: 0.78, metalness: 0, ...o });
 export function box(w, h, d, r, hex, x = 0, y = 0, z = 0, o) {
@@ -86,21 +89,25 @@ export function makePostman({ elder = false } = {}) {
   const body = new THREE.Group();
   body.rotation.z = -0.42;                       // 앞으로 숙인 자세
   g.add(body);
-  const jacket = "#4f7fb5", skin = elder ? "#efc9a6" : "#f6d2b0", leather = "#c98a4b";
+  // 해무(elder)는 나와 한눈에 구분되도록 옷 색을 완전히 다르게 입는다: 나는 빨간 모자와 파란 옷, 해무는 짙은 초록 모자와 코트에 금빛 띠
+  const pal = elder
+    ? { jacket: "#2f6b50", cap: "#24493a", brim: "#183a2d", band: "#f2d98a", scarf: "#f2c94c", badge: "#fff3b0", bag: "#7a5a3a" }
+    : { jacket: "#4f7fb5", cap: "#d9452c", brim: "#b8341f", band: "#faf3e6", scarf: "#e8553a", badge: "#ffd166", bag: "#c98a4b" };
+  const jacket = pal.jacket, skin = elder ? "#efc9a6" : "#f6d2b0", leather = pal.bag;
   const arms = [], legs = [], wings = [];
 
   // 몸통 + 스카프 + 허리띠
   body.add(mesh(new THREE.CapsuleGeometry(0.23, 0.32, 8, 16), jacket, 0, 0.1, 0));
-  const scarf = mesh(new THREE.TorusGeometry(0.2, 0.06, 10, 24), "#e8553a", 0, 0.4, 0); scarf.rotation.x = Math.PI / 2; body.add(scarf);
+  const scarf = mesh(new THREE.TorusGeometry(0.2, 0.06, 10, 24), pal.scarf, 0, 0.4, 0); scarf.rotation.x = Math.PI / 2; body.add(scarf);
   const belt = mesh(new THREE.TorusGeometry(0.235, 0.035, 8, 28), "#3d2a22", 0, -0.04, 0); belt.rotation.x = Math.PI / 2; body.add(belt);
 
   // 머리: 큰 둥근 얼굴, 우체부 모자(챙이 앞), 눈·코·볼·콧수염
   const head = new THREE.Group(); head.position.set(0.04, 0.8, 0); body.add(head);
   head.add(mesh(new THREE.SphereGeometry(0.31, 28, 20), skin));
-  head.add(mesh(new THREE.SphereGeometry(0.335, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), "#d9452c", 0, 0.07, 0));
-  const band = mesh(new THREE.TorusGeometry(0.325, 0.03, 8, 32), "#faf3e6", 0, 0.07, 0); band.rotation.x = Math.PI / 2; head.add(band);
-  head.add(box(0.3, 0.045, 0.42, 0.02, "#b8341f", 0.3, 0.05, 0));
-  const badge = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 16), "#ffd166", 0.335, 0.2, 0); badge.rotation.z = Math.PI / 2; head.add(badge);
+  head.add(mesh(new THREE.SphereGeometry(0.335, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), pal.cap, 0, 0.07, 0));
+  const band = mesh(new THREE.TorusGeometry(0.325, 0.03, 8, 32), pal.band, 0, 0.07, 0); band.rotation.x = Math.PI / 2; head.add(band);
+  head.add(box(0.3, 0.045, 0.42, 0.02, pal.brim, 0.3, 0.05, 0));
+  const badge = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 16), pal.badge, 0.335, 0.2, 0); badge.rotation.z = Math.PI / 2; head.add(badge);
   [-1, 1].forEach((z) => {
     head.add(mesh(new THREE.SphereGeometry(0.045, 12, 10), "#2b1d1a", 0.27, 0.0, z * 0.12));
     head.add(mesh(new THREE.SphereGeometry(0.015, 8, 6), "#ffffff", 0.305, 0.02, z * 0.115));
@@ -168,9 +175,9 @@ function addHouse(g, style) {
     g.add(box(0.16, 0.4, 0.16, 0.04, "#b9a58a", 0.2, 1.4, -0.35));
   } else if (style === 1) {                                       // 박공지붕 통나무집
     g.add(box(0.95, 0.55, 0.85, 0.08, wall, hx, y0, hz));
-    [-1, 1].forEach((sd) => {                                     // 두 장의 지붕판이 용마루에서 만난다
+    [-1, 1].forEach((sd) => {                                     // 두 장의 지붕판이 용마루에서 만난다(^자: 안쪽이 높고 바깥쪽이 처마)
       const slab = box(1.15, 0.07, 0.62, 0.03, roof, hx, y0 + 0.74, hz + sd * 0.27);
-      slab.rotation.x = -sd * 0.72; g.add(slab);
+      slab.rotation.x = sd * 0.72; g.add(slab);
     });
     const tri = new THREE.Shape(); tri.moveTo(-0.43, 0); tri.lineTo(0.43, 0); tri.lineTo(0, 0.4);
     const gab = new THREE.Mesh(new THREE.ShapeGeometry(tri), mat(wall, { side: THREE.DoubleSide }));
@@ -198,6 +205,26 @@ function addHouse(g, style) {
 
 // 바다 위에 떠 있는 둥근 섬 하나 (바위 → 모래 → 잔디 층, 가장자리에 물거품)
 
+// 편지섬의 우체국: 빨간 박공지붕 건물, 깃발, 커다란 빨간 우체통. 편지를 쓰러 오는 곳이라 이야기 섬의 집들보다 눈에 띄게 만든다.
+function addPostOffice(g) {
+  const hx = -0.15, hz = -0.1, y0 = 0.58;
+  g.add(box(1.0, 0.6, 0.86, 0.1, "#fff1d6", hx, y0, hz));
+  [-1, 1].forEach((sd) => {
+    const slab = box(1.2, 0.08, 0.64, 0.03, "#e8553a", hx, y0 + 0.78, hz + sd * 0.28);
+    slab.rotation.x = sd * 0.72; g.add(slab);
+  });
+  g.add(box(0.22, 0.38, 0.05, 0.02, "#a5603a", hx, y0, hz + 0.45), box(0.05, 0.2, 0.2, 0.02, "#7ea6d4", hx + 0.52, y0 + 0.22, hz));
+  g.add(box(0.5, 0.14, 0.04, 0.02, "#fff7e0", hx, y0 + 0.5, hz + 0.46));                       // 문 위 간판
+  g.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 8), "#efe3cd", hx - 0.5, y0 + 0.9, hz - 0.3));   // 깃대와 깃발
+  g.add(box(0.3, 0.17, 0.03, 0.02, "#e8553a", hx - 0.35, y0 + 1.25, hz - 0.3));
+  // 우체통: 빨간 몸통, 둥근 윗면, 편지 넣는 틈
+  g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8), "#8c7a63", 0.62, y0 + 0.15, 0.5));
+  g.add(box(0.34, 0.3, 0.26, 0.07, "#d9452c", 0.62, y0 + 0.3, 0.5));
+  const dome = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.26, 16, 1, false, 0, Math.PI), "#d9452c", 0.62, y0 + 0.6, 0.5);
+  dome.rotation.z = Math.PI / 2; dome.rotation.y = Math.PI / 2; g.add(dome);
+  g.add(box(0.2, 0.03, 0.03, 0.01, "#3d2a22", 0.62, y0 + 0.5, 0.64));
+}
+
 // 바다 위에 떠 있는 둥근 섬 하나 (바위 → 모래 → 잔디 층, 가장자리에 물거품)
 export function buildIsland({ x, z, roof = "#d9d2c3", grade = false, locked = false, arch = false, home = false, style = 0, stop = -1 }) {
   const g = new THREE.Group();
@@ -205,7 +232,7 @@ export function buildIsland({ x, z, roof = "#d9d2c3", grade = false, locked = fa
   g.add(puck(1.5, 1.1, 0.5, "#b9a58a", 0, -0.8, 0));
   g.add(puck(1.45, 0.4, 0.2, "#f2e2bd", 0, -0.06, 0));
   g.add(puck(1.15, 0.3, 0.15, "#a5d65a", 0, 0.28, 0));
-  addHouse(g, style, roof);
+  if (style === "post") addPostOffice(g); else addHouse(g, style, roof);
   g.add(palm(0.7, -0.55, 0.58, 1.2), bush(-0.8, 0.65, 0.58));
   if (grade) g.add(box(0.36, 0.3, 0.36, 0.08, "#5ec9a7", 0.65, 0.58, 0.6));
   if (arch) {   // 출발 섬: START 아치
@@ -220,6 +247,24 @@ export function buildIsland({ x, z, roof = "#d9d2c3", grade = false, locked = fa
   foam.rotation.x = -Math.PI / 2; foam.position.y = 0.05; foam.name = "foam"; g.add(foam);
   if (locked) g.traverse((o) => { if (o.material?.color && o.name !== "foam") o.material.color.lerp(new THREE.Color("#a8b4bd"), 0.5); });
   g.traverse((o) => { o.userData.stop = stop; });
+  return g;
+}
+
+// 유리병 편지: 몸통이 +y 방향이고 병목과 코르크가 위쪽이다(누이면 rotation.z = -π/2로 병목이 +x를 향한다).
+// userData: cork(마개, 뽑으면 날아간다), scroll(병 속에 말려 든 편지). 크기는 약 높이 1.15.
+export function makeBottle() {
+  const g = new THREE.Group();
+  const glass = { transparent: true, opacity: 0.38, roughness: 0.05, metalness: 0, emissive: "#9fe0c8", emissiveIntensity: 0.18, side: THREE.DoubleSide };
+  const body = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.62, 22), "#bfe9d8", 0, 0, 0, glass); body.castShadow = false;
+  const shoulder = mesh(new THREE.SphereGeometry(0.13, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2), "#bfe9d8", 0, 0.31, 0, glass); shoulder.castShadow = false;
+  const neck = mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.3, 16), "#bfe9d8", 0, 0.5, 0, glass); neck.castShadow = false;
+  const lip = mesh(new THREE.TorusGeometry(0.062, 0.02, 8, 18), "#cfeee0", 0, 0.66, 0, { transparent: true, opacity: 0.6 }); lip.rotation.x = Math.PI / 2;
+  const cork = mesh(new THREE.CylinderGeometry(0.052, 0.045, 0.14, 14), "#c9a06a", 0, 0.69, 0);
+  const scroll = new THREE.Group();                                           // 병 속에 든 편지: 돌돌 말린 종이와 리본
+  scroll.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.46, 14), "#f3e3b8", 0, 0, 0), mesh(new THREE.TorusGeometry(0.052, 0.012, 6, 16), "#e8553a", 0, 0.05, 0));
+  scroll.children[1].rotation.x = Math.PI / 2; scroll.position.set(0, 0.12, 0); scroll.rotation.z = 0.08;
+  g.add(body, shoulder, neck, lip, scroll, cork);
+  g.userData.cork = cork; g.userData.scroll = scroll;
   return g;
 }
 

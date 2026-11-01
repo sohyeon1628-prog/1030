@@ -1,16 +1,18 @@
 import React from "react";
 import { GRADE_NAME } from "../data/letters.js";
+import { HAEMU_LETTER } from "../data/chapters.js";
 
 // 이야기 노트: 네 통이 어떻게 이어지는지 한눈에. 아직 열리지 않은 장은 가려 둔다(스포일러 방지).
-export default function NoteScreen({ letters, grades, isUnlocked, onBack, onReplay, onEdit, nickname, onNick, onReset }) {
+// 네 통을 모두 전하면 가방 맨 밑 주머니에 있던 해무의 편지도 여기에 남는다.
+export default function NoteScreen({ letters, grades, isUnlocked, storyDone, onBack, onReplay, onReplayEpilogue, bottleSeen, onReplayBottle, nickname, onNick, onReset }) {
   return (
     <main className="screen">
       <div className="form">
         <h2>이야기 노트</h2>
         {nickname && <p className="sub">닉네임: <b>{nickname}</b></p>}
-        <p className="sub">당신이 정한 네 사람의 이야기입니다. 한 사람에게 닿으면, 그 섬이 다음 사람에 대해 적어 둔 장면을 돌려줍니다.</p>
+        <p className="sub">해무의 가방에 남아 있던 네 통의 편지입니다. 한 섬에 닿으면, 그 섬이 다음 섬으로 가는 바람길을 열어 줍니다.</p>
         <div className="chain" aria-label="이야기 순서">
-          <span className="node done">나</span>
+          <span className="node done">해무</span>
           {letters.map((l, i) => (
             <React.Fragment key={l.id}>
               <span className="arrow">→</span>
@@ -32,9 +34,17 @@ export default function NoteScreen({ letters, grades, isUnlocked, onBack, onRepl
             </article>
           );
         })}
+        {storyDone && (
+          <article className="paper">
+            <h2>가방 맨 밑 주머니</h2>
+            <div className="route">해무 → 은결</div>
+            {HAEMU_LETTER.map((l, i) => <p key={i}>{l}</p>)}
+          </article>
+        )}
         <div className="row">
-          {onEdit && letters.some((l) => !grades[l.id]) && <button className="btn ghost" onClick={onEdit}>나의 이야기 고치기</button>}
           <button className="btn ghost" onClick={onReplay}>오프닝 다시 보기</button>
+          {storyDone && <button className="btn ghost" onClick={onReplayEpilogue}>에필로그 다시 보기</button>}
+          {bottleSeen && <button className="btn ghost" onClick={onReplayBottle}>병 편지 다시 보기</button>}
           {onNick && <button className="btn ghost" onClick={onNick}>닉네임 바꾸기</button>}
           <button className="btn ghost" onClick={onBack}>지도로</button>
         </div>

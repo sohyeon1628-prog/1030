@@ -3,7 +3,7 @@ import * as THREE from "three";
 import WorldMap from "./WorldMap.jsx";
 import { GRADE_NAME } from "../data/letters.js";
 import Icon, { RELATION_ICON } from "./Icon.jsx";
-import { ISLANDS, CENTER, buildIsland, buoy, boat, makePostman, animatePostman, waterTexture, makeFog, makeBridge, makeExtras, makeIslet, makeGull, animateGull, makeDolphin, makeFish, makeTurtle } from "../three/parts.js";
+import { ISLANDS, CENTER, POST_ISLAND, buildIsland, makeEnvelope, buoy, boat, makePostman, animatePostman, waterTexture, makeFog, makeBridge, makeExtras, makeIslet, makeGull, animateGull, makeDolphin, makeFish, makeTurtle } from "../three/parts.js";
 
 // 직전에 보여 준 진행도. 새로 배달이 끝나 돌아왔을 때만 "구름이 걷히고 땅이 생기는" 연출을 재생한다.
 let seenCount = null;
@@ -23,6 +23,7 @@ function routeT(x, z) {
   return best.t;
 }
 function fogThr(x, z) {
+  if (Math.hypot(x - POST_ISLAND.x, z - POST_ISLAND.z) < 2.7) return 4;                   // 편지섬은 네 통을 모두 전해야 안개가 걷힌다
   for (let k = 1; k <= 4; k++) if (Math.hypot(x - ISLANDS[k].x, z - ISLANDS[k].z) < 2.7) return k - 1;   // 섬 하나는 통째로 같이 걷힌다
   return Math.max(0, Math.ceil(routeT(x, z) - 1e-6) - 1);
 }
@@ -32,11 +33,14 @@ const ISLETS = [{ x: -3.4, z: 5.2 }, { x: 12.4, z: 3.8 }, { x: 8.4, z: 17.4 }].m
 // 진짜 3D 장난감 세계: 바다 위에 따로 떠 있는 섬들. 아이소메트릭 정사영 카메라 + 부드러운 그림자.
 // ISLANDS[0]은 해무의 집(출발점), ISLANDS[i+1]은 편지 i의 도착 섬. 섬 사이의 점선 = 바람길,
 // 부표 = 아직 끊겨 있는 항로(배달하면 사라진다). WebGL이 없으면 SVG 지도로 대체.
-export default function World3D({ letters, grades, isUnlocked, onOpen, interactive = true }) {
+// postOpen: 편지섬이 열렸는가(네 통을 모두 전했는가). onPost: 편지섬을 눌렀을 때(내 편지 쓰기).
+export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost, interactive = true }) {
   const wrap = useRef(null);
   const labels = useRef([]);
   const openRef = useRef(onOpen);
   openRef.current = onOpen;
+  const postRef = useRef(onPost);
+  postRef.current = onPost;
   const liveRef = useRef(interactive);
   liveRef.current = interactive;
   const [fallback, setFallback] = useState(false);
@@ -86,29 +90,38 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
       world.add(g); return g;
     });
 
+    // 편지섬: 내 편지를 쓰는 곳. 열리면 위에 봉투가 떠서 돌고, 아직이면 회색빛으로 안개 속에 있다.
+    const post = buildIsland({ x: POST_ISLAND.x, z: POST_ISLAND.z, style: "post", locked: !postOpen, stop: 99 });
+    world.add(post);
+    const postEnv = makeEnvelope(); postEnv.scale.setScalar(1.8); postEnv.visible = postOpen; world.add(postEnv);
+
     // 바람길: 섬에서 섬으로 잇는 포물선. 이어진 길은 금빛 입자가 흐르고, 끊긴 길은 점선 + 부표
+    const curveAB = (a, b) => new THREE.QuadraticBezierCurve3(new THREE.Vector3(a.x, 1.0, a.z), new THREE.Vector3((a.x + b.x) / 2, 2.6, (a.z + b.z) / 2), new THREE.Vector3(b.x, 1.0, b.z));
     const curve = (i) => {
       const a = ISLANDS[i], b = ISLANDS[i + 1];
       return new THREE.QuadraticBezierCurve3(new THREE.Vector3(a.x, 1.0, a.z), new THREE.Vector3((a.x + b.x) / 2, 2.6, (a.z + b.z) / 2), new THREE.Vector3(b.x, 1.0, b.z));
     };
-    const flows = [], buoys = [];
-    letters.forEach((l, i) => {
-      const cv = curve(i), done = !!grades[l.id];
+    // 점선(흰 점)은 아직 끊긴 항로에만 둔다. 다리가 놓이면(배달을 마치면) 점선은 없어지고 다리만 남는다.
+    const buoys = [];
+    const dots = (cv) => {
       for (let k = 0; k < 14; k++) {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(done ? 0.07 : 0.05, 10, 8), new THREE.MeshBasicMaterial({ color: done ? "#ffd166" : "#ffffff", transparent: true, opacity: done ? 0.95 : 0.55 }));
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55 }));
         m.position.copy(cv.getPoint(k / 13)); world.add(m);
-        if (done) flows.push({ m, cv, k });
       }
-      if (!done) {
-        const p = cv.getPoint(0.86);
-        [-0.5, 0, 0.5].forEach((o) => { const b = buoy(p.x + o * 0.9, p.z - o * 0.9); world.add(b); buoys.push(b); });
-      }
+    };
+    letters.forEach((l, i) => {
+      if (grades[l.id]) return;
+      const cv = curve(i);
+      dots(cv);
+      const p = cv.getPoint(0.86);
+      [-0.5, 0, 0.5].forEach((o) => { const b = buoy(p.x + o * 0.9, p.z - o * 0.9); world.add(b); buoys.push(b); });
     });
+    if (!postOpen) dots(curveAB(ISLANDS[4], POST_ISLAND));      // 마지막 이야기 섬 → 편지섬도 열리기 전에는 점선, 열리면 다리
 
     const boats = [["#e8553a", 26, 0], ["#5aa3d4", 34, 0.5]].map(([c, dur, ph]) => { const m = boat(c); world.add(m); return { m, dur, ph }; });
 
     // 바다의 생물: 섬 위를 지나지 않도록, 섬·작은 섬·다리를 피해 다닌다
-    const obstacles = [...ISLANDS.map((o) => ({ x: o.x, z: o.z, r: 3.0 })), ...ISLETS.filter((l) => letters.filter((x) => grades[x.id]).length >= l.thr).map((o) => ({ x: o.x, z: o.z, r: 2.0 }))];
+    const obstacles = [...ISLANDS.map((o) => ({ x: o.x, z: o.z, r: 3.0 })), { x: POST_ISLAND.x, z: POST_ISLAND.z, r: 3.0 }, ...ISLETS.filter((l) => letters.filter((x) => grades[x.id]).length >= l.thr).map((o) => ({ x: o.x, z: o.z, r: 2.0 }))];
     const avoid = (x, z) => {
       for (let k = 0; k < 3; k++) {
         for (const o of obstacles) { const dx = x - o.x, dz = z - o.z, d = Math.hypot(dx, dz) || 0.001; if (d < o.r) { x = o.x + (dx / d) * o.r; z = o.z + (dz / d) * o.r; } }
@@ -167,6 +180,10 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
       bridgeSegs.push({ a: ISLANDS[i], b: ISLANDS[i + 1] });
       if (i >= seen) { br.items.forEach((m) => m.scale.setScalar(0.001)); bridgesAnim.push({ items: br.items, delay: 3.4 }); }
     }
+    if (postOpen) {                                              // 편지섬이 열리면 마지막 이야기 섬에서 다리로 이어진다
+      const br = makeBridge(ISLANDS[4], POST_ISLAND); world.add(br.group);
+      bridgeSegs.push({ a: ISLANDS[4], b: POST_ISLAND });
+    }
     ISLETS.forEach((l) => {                                      // 걷힌 자리에 솟아난 작은 섬
       if (delivered < l.thr) return;
       const it = makeIslet(); it.position.set(l.x, 0, l.z);
@@ -190,11 +207,15 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
       const r = el.getBoundingClientRect();
       ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ptr, cam);
-      const hit = ray.intersectObjects(stops, true)[0];
+      const hit = ray.intersectObjects([...stops, post], true)[0];
       return hit ? hit.object.userData.stop : -1;
     };
-    const move = (e) => { if (!liveRef.current) return; hover = pick(e); el.style.cursor = hover >= 0 && isUnlocked(hover) ? "pointer" : "default"; };
-    const click = (e) => { if (!liveRef.current) return; const i = pick(e); if (i >= 0 && isUnlocked(i)) openRef.current(letters[i]); };
+    const move = (e) => { if (!liveRef.current) return; hover = pick(e); el.style.cursor = hover === 99 ? (postOpen ? "pointer" : "default") : hover >= 0 && isUnlocked(hover) ? "pointer" : "default"; };
+    const click = (e) => {
+      if (!liveRef.current) return;
+      const i = pick(e);
+      if (i === 99) { if (postOpen) postRef.current?.(); } else if (i >= 0 && isUnlocked(i)) openRef.current(letters[i]);
+    };
     el.addEventListener("pointermove", move); el.addEventListener("click", click);
 
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -210,7 +231,14 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
         const foam = s.getObjectByName("foam");
         if (foam) { foam.scale.setScalar(1 + Math.sin(t * 1.6 + k) * 0.05); foam.material.opacity = 0.42 + Math.sin(t * 1.6 + k) * 0.12; }
       });
-      flows.forEach(({ m, cv, k }) => { m.position.copy(cv.getPoint(((t / 8) + k / 14) % 1)); });
+      {                                                                   // 편지섬: 물 위에서 흔들리고, 열렸으면 봉투가 떠서 돈다
+        const on = hover === 99 && postOpen ? 1.04 : 1;
+        post.scale.lerp(v.set(on, 1, on), 0.15);
+        post.position.y = Math.sin(t * 1.3 + 8.5) * 0.05;
+        const foam = post.getObjectByName("foam");
+        if (foam) { foam.scale.setScalar(1 + Math.sin(t * 1.6 + 5) * 0.05); foam.material.opacity = 0.42 + Math.sin(t * 1.6 + 5) * 0.12; }
+        if (postOpen) { postEnv.position.set(POST_ISLAND.x - 0.15, 2.9 + Math.sin(t * 2) * 0.14, POST_ISLAND.z - 0.1); postEnv.rotation.y = t * 1.2; postEnv.rotation.z = Math.sin(t * 1.6) * 0.15; }
+      }
       buoys.forEach((b, k) => { b.position.y = Math.sin(t * 1.8 + k) * 0.06; b.rotation.z = Math.sin(t * 1.4 + k) * 0.1; });
       boats.forEach(({ m, dur, ph }) => {
         const a = ((t / dur) + ph) * Math.PI * 2;
@@ -276,10 +304,9 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
       renderer.render(scene, cam);
       // 라벨(접근 가능한 버튼)을 3D 위치에 맞춰 투영
       const w = el.clientWidth, h = el.clientHeight;
-      letters.forEach((_, i) => {
+      [...letters.map((_, i) => ISLANDS[i + 1]), POST_ISLAND].forEach((s, i) => {      // 마지막 라벨은 편지섬
         const node = labels.current[i]; if (!node) return;
-        const s = ISLANDS[i + 1];
-        v.set(s.x, 3.4, s.z).project(cam);
+        v.set(s.x, i === letters.length ? 3.9 : 3.4, s.z).project(cam);
         node.style.transform = `translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px) translate(-50%, -100%)`;
       });
       raf = requestAnimationFrame(loop);
@@ -293,9 +320,9 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
       renderer.dispose(); renderer.domElement.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gradesKey]);
+  }, [gradesKey, postOpen]);
 
-  if (fallback) return <WorldMap letters={letters} grades={grades} isUnlocked={isUnlocked} onOpen={onOpen} />;
+  if (fallback) return <WorldMap letters={letters} grades={grades} isUnlocked={isUnlocked} onOpen={onOpen} postOpen={postOpen} onPost={onPost} />;
 
   return (
     <div className={`world3d ${interactive ? "" : "off"}`} ref={wrap}>
@@ -312,6 +339,12 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, interacti
           </button>
         );
       })}
+      {/* 편지섬: 내 편지를 쓰는 곳. 닫혀 있어도 마우스를 올리면 어떻게 여는지 알려 준다. */}
+      <button ref={(n) => (labels.current[letters.length] = n)} className={`pin post ${postOpen ? "target" : "locked"}`} disabled={!postOpen} onClick={() => onPost?.()}
+        aria-label={postOpen ? "편지섬: 내 편지 쓰기" : "편지섬: 네 통의 편지를 모두 전하면 열려요"}>
+        <span className="pin-ico"><Icon name={postOpen ? "pen" : "lock"} size={postOpen ? 22 : 13} /></span>
+        <span className="pin-tip">편지섬<small>{postOpen ? "내 편지 쓰기" : "네 통을 모두 전하면 열려요"}</small></span>
+      </button>
     </div>
   );
 }

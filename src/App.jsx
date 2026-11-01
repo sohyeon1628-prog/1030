@@ -1,27 +1,27 @@
 import React, { useState, useCallback, useMemo, useEffect } from "react";
 import World3D from "./components/World3D.jsx";
 import FlightScreen from "./components/FlightScreen.jsx";
-import StoryScreen from "./components/StoryScreen.jsx";
+import Epilogue3D from "./components/Epilogue3D.jsx";
+import Bottle3D from "./components/Bottle3D.jsx";
 import Intro3D from "./components/Intro3D.jsx";
 import WriteScreen from "./components/WriteScreen.jsx";
 import MailboxScreen from "./components/MailboxScreen.jsx";
 import NoteScreen from "./components/NoteScreen.jsx";
 import HowToScreen from "./components/HowToScreen.jsx";
-import SetupScreen from "./components/SetupScreen.jsx";
 import NicknameScreen from "./components/NicknameScreen.jsx";
 import Icon from "./components/Icon.jsx";
 import ShareBox from "./components/ShareBox.jsx";
 import { NAME_TOKEN } from "./components/WriteScreen.jsx";
-import { createLetter, createLetters, letterUrl } from "./api.js";
+import { uploadLetters } from "./share.js";
 import { GRADE_NAME } from "./data/letters.js";
-import { DEFAULT_PROFILE, buildLetters, buildEpilogue } from "./data/profile.js";
+import { buildLetters } from "./data/chapters.js";
 import { FLIGHT_BY_GAP, FLIGHT_COMMON, DELAYS, pickReply } from "./data/story.js";
 import { loadState, saveState, recordDelivery, addMine } from "./storage.js";
 import { setMuted } from "./game/audio.js";
 import { saveVoice, deleteVoice } from "./party/audio.js";
 import { fmtWhen } from "./party/config.js";
 
-// 나의 이야기 → 3D 오프닝 → 지도 → [편지 읽기] → 비행 조작 → [도착] → (에필로그) → 내 편지 쓰기 · 편지함
+// 3D 오프닝(해무 이야기) → 지도 → [편지 읽기] → 비행 조작 → [도착] → (에필로그) → 편지섬(내 편지 쓰기) · 편지함
 // 바다 지도는 비행 화면을 뺀 모든 화면의 전체 배경이다.
 export default function App() {
   const [state, setState] = useState(() => {
@@ -29,7 +29,7 @@ export default function App() {
     setMuted(s.muted);
     return s;
   });
-  const home = !(state.setupDone || state.storySeen) ? "intro" : state.storySeen ? "map" : "intro";
+  const home = state.storySeen ? "map" : "intro";
   const [screen, setScreen] = useState(state.nickname ? home : "nickname");   // 닉네임이 없으면 먼저 정한다
   const [nickFrom, setNickFrom] = useState(null);   // 이야기 노트에서 닉네임을 바꾸러 왔는가
   const [howto, setHowto] = useState(state.storySeen && !state.howtoSeen);   // 처음 온 사람에게 자동으로 안내
@@ -44,15 +44,13 @@ export default function App() {
   const [run, setRun] = useState(0);                 // 비행 시작마다 증가 → 비행 화면 새로 시작
 
   const update = useCallback((fn) => setState((prev) => { const next = fn(prev); saveState(next); return next; }), []);
-  const [editing, setEditing] = useState(false);   // 이야기 노트에서 나의 이야기를 고치는 중인가
-  // 나의 이야기(프로필) → 편지 네 통. 예시 구성이 기본값이라 그대로 시작해도 된다.
-  const profile = useMemo(() => state.profile ?? { ...DEFAULT_PROFILE, name: state.nickname || "" }, [state.profile, state.nickname]);
-  const letters = useMemo(() => buildLetters(profile), [profile]);
+  // 고정된 이야기의 편지 네 통
+  const letters = useMemo(() => buildLetters(), []);
   // 처음 날 때(아직 이야기 편지를 하나도 전하지 못했고 연습도 안 했을 때)는 연습 비행부터 시작한다
   const firstTime = !state.practiceDone && Object.keys(state.grade).length === 0;
-  // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 바꾸면 나의 이야기의 "나" 이름도 같이 바뀐다.
+  // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 해무가 부르는 이름이자 내 편지의 보내는 사람 이름이다.
   const submitNick = (n) => {
-    update((s) => ({ ...s, nickname: n, profile: s.profile ? { ...s.profile, name: n } : s.profile }));
+    update((s) => ({ ...s, nickname: n }));
     if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(home);
   };
   // 테스트용 초기화: 저장된 진행(이야기·편지함·녹음·닉네임)을 모두 지우고 처음 상태로 다시 연다.
@@ -68,17 +66,17 @@ export default function App() {
   const closeHowto = () => { setHowto(false); update((s) => ({ ...s, howtoSeen: true })); };
 
   // 링크로 보낼 편지를 서버에 올린다(여러 사람이면 한 번에). 성공하면 편지함 항목마다 링크 정보(id, 회수용 secret)를 붙인다.
-  const upload = (entries) => {
+  // 편지를 올리고(share.js), 성공하면 편지함 항목마다 링크 정보(id, 회수용 secret)를 붙인다.
+  const upload = async (entries) => {
     const list = [].concat(entries);
-    const payload = (e) => ({ from: e.fromName, to: e.to, body: e.body, paper: e.paper, grade: e.grade, gap: e.gap, expireDays: e.expireDays });
-    const req = list.length === 1 ? createLetter(payload(list[0])).then((r) => [r]) : createLetters(list.map(payload)).then((r) => r.letters);
-    return req
-      .then((rs) => {
-        const byId = Object.fromEntries(list.map((e, i) => [e.id, rs[i]]));
-        update((s) => ({ ...s, mine: s.mine.map((m) => (byId[m.id] ? { ...m, share: { id: byId[m.id].id, secret: byId[m.id].secret, expiresAt: byId[m.id].expiresAt } } : m)) }));
-        return { status: "done", links: list.map((e, i) => ({ to: e.to, url: letterUrl(rs[i].id) })) };
-      })
-      .catch((e) => ({ status: "error", code: e.status, entries: list }));
+    try {
+      const { rs, links } = await uploadLetters(list);
+      const byId = Object.fromEntries(list.map((e, i) => [e.id, rs[i]]));
+      update((s) => ({ ...s, mine: s.mine.map((m) => (byId[m.id] ? { ...m, share: { id: byId[m.id].id, secret: byId[m.id].secret, expiresAt: byId[m.id].expiresAt } } : m)) }));
+      return { status: "done", links };
+    } catch (e) {
+      return { status: "error", code: e.status, entries: list };
+    }
   };
   const patchMine = (id, patch) => update((s) => ({ ...s, mine: s.mine.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
 
@@ -91,6 +89,10 @@ export default function App() {
         createdAt: now, openAt: letter.mode === "link" ? now : now + letter.delay, grade: g, reply: letter.reply,
         mode: letter.mode || "future", fromName: letter.fromName, expireDays: letter.expireDays,
       };
+      if (letter.mode === "link") {                                // 도착 장면과 녹음(올리기 전까지 기기에 둔다. 여러 명이면 한 사본을 함께 쓴다)
+        entry.scene = letter.scene || "island"; entry.voiceKey = entry.id;
+        if (letter.voice && saveVoice(entry.id, letter.voice.url)) entry.hasVoice = true;
+      }
       if (letter.mode === "party") {
         entry.openAt = now + letter.delay; entry.party = letter.party; entry.hasVoice = !!letter.voice;
         if (letter.voice && !saveVoice(entry.id, letter.voice.url)) entry.hasVoice = false;   // 저장 공간이 모자라면 기본 노래로
@@ -108,11 +110,11 @@ export default function App() {
     setScreen("arrive");
   };
 
-  const submitMine = ({ mode, fromName, expireDays, to, tos, gap, paper, delay, body, party, voice }) => {
+  const submitMine = ({ mode, fromName, expireDays, to, tos, gap, paper, delay, body, party, voice, scene }) => {
     const id = `m${Date.now()}`;
     if (mode === "party" && "Notification" in window && Notification.permission === "default") Notification.requestPermission();   // 도착 알림
     setLetter({
-      id, custom: true, mode, party, voice, fromName, expireDays, from: "나", to, tos, title: `${to}에게`, gap, paper, delay,
+      id, custom: true, mode, party, voice, scene, fromName, expireDays, from: "나", to, tos, title: `${to}에게`, gap, paper, delay,
       body: body.split("\n"), reply: pickReply(gap, id),
       flight: { ...FLIGHT_BY_GAP[gap], ...FLIGHT_COMMON },
     });
@@ -142,12 +144,9 @@ export default function App() {
   if (screen === "intro") {
     return (
       <div className="app">
-        {/* 처음에는 해무가 묻고 내가 답하는 대화형 오프닝, 다시 볼 때는 정해 둔 이야기로 재생 */}
         <Intro3D
-          interactive={!(state.setupDone || state.storySeen)}
-          profile={profile}
           nickname={state.nickname}
-          onDone={(pr) => { update((s) => ({ ...s, profile: pr || s.profile, setupDone: true, storySeen: true })); setHowto(!state.howtoSeen); setScreen("map"); }}
+          onDone={() => { update((s) => ({ ...s, storySeen: true })); setHowto(!state.howtoSeen); setScreen("map"); }}
         />
       </div>
     );
@@ -172,21 +171,8 @@ export default function App() {
   return (
     <div className="app">
       <div className={`bg ${screen === "map" ? "" : "dim"}`}>
-        <World3D letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} interactive={screen === "map" && !howto} />
+        <World3D letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
       </div>
-
-      {screen === "setup" && (
-        <SetupScreen
-          initial={profile}
-          editing={editing}
-          lockedCount={editing ? letters.filter((l) => state.grade[l.id]).length : 0}
-          onBack={editing ? () => { setEditing(false); setScreen("note"); } : undefined}
-          onSubmit={(pr) => {
-            update((s) => ({ ...s, profile: pr, setupDone: true }));
-            if (editing) { setEditing(false); setScreen("note"); } else setScreen("intro");
-          }}
-        />
-      )}
 
       {screen === "nickname" && <NicknameScreen initial={state.nickname} onSubmit={submitNick} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}
 
@@ -203,7 +189,8 @@ export default function App() {
         </main>
       )}
 
-      {screen === "epilogue" && <StoryScreen lines={buildEpilogue(profile)} doneLabel="지도로" onDone={() => setScreen("map")} />}
+      {screen === "bottle" && <Bottle3D nickname={state.nickname} onDone={() => { update((s) => ({ ...s, bottleSeen: true })); setScreen(state.mine.length ? "mailbox" : "map"); }} />}
+      {screen === "epilogue" && <Epilogue3D nickname={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
 
       {screen === "map" && (
         <main className="screen map-ui">
@@ -217,9 +204,6 @@ export default function App() {
             <button className="icon-btn right" onClick={toggleMute} aria-label={state.muted ? "소리 켜기" : "소리 끄기"} title={state.muted ? "소리 켜기" : "소리 끄기"}><Icon name={state.muted ? "mute" : "sound"} size={22} /></button>
           </header>
           <div className="row dock">
-            <button className={`dock-btn primary ${storyDone ? "glow" : ""}`} disabled={!storyDone} onClick={() => setScreen("write")} aria-label={storyDone ? "내 편지 쓰기" : "내 편지 쓰기 (네 통을 전하면 열려요)"} title="내 편지 쓰기">
-              <Icon name="pen" size={26} />{!storyDone && <span className="dock-lock"><Icon name="lock" size={13} /></span>}
-            </button>
             <button className="dock-btn" onClick={() => setScreen("mailbox")} aria-label={`편지함${state.mine.length ? ` ${state.mine.length}통` : ""}`} title="편지함">
               <Icon name="mail" size={26} />{state.mine.length > 0 && <span className="dock-badge">{state.mine.length}</span>}
             </button>
@@ -228,9 +212,9 @@ export default function App() {
         </main>
       )}
 
-      {screen === "write" && <WriteScreen myName={profile.name} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
+      {screen === "write" && <WriteScreen myName={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
       {screen === "mailbox" && <MailboxScreen focusId={focusId} onDeleteVoice={(m) => { deleteVoice(m.id); patchMine(m.id, { hasVoice: false }); }} onRetry={(m) => upload(m).then((r) => { if (r.status === "error") window.alert("아직 서버에 닿지 못했어요."); })} onPatch={patchMine} orbsTotal={orbsTotal} mine={state.mine} grades={state.grade} onBack={() => { setFocusId(null); setScreen("map"); }} />}
-      {screen === "note" && <NoteScreen nickname={state.nickname} onNick={() => { setNickFrom(true); setScreen("nickname"); }} onReset={resetAll} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onEdit={() => { setEditing(true); setScreen("setup"); }} />}
+      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} onNick={() => { setNickFrom(true); setScreen("nickname"); }} onReset={resetAll} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
 
       {screen === "read" && letter && (
         <main className="screen center">
@@ -280,7 +264,9 @@ export default function App() {
           <div className="row">
             {epilogue
               ? <button className="btn" onClick={() => { setEpilogue(false); setScreen("epilogue"); }}>이야기의 끝으로</button>
-              : <button className="btn" onClick={() => setScreen(letter.custom ? "mailbox" : "map")}>{letter.custom ? "편지함으로" : "지도로"}</button>}
+              : letter.custom && !state.bottleSeen
+                ? <><button className="btn" onClick={() => setScreen("bottle")}>바다를 바라본다</button><button className="btn ghost" onClick={() => setScreen("mailbox")}>편지함으로</button></>
+                : <button className="btn" onClick={() => setScreen(letter.custom ? "mailbox" : "map")}>{letter.custom ? "편지함으로" : "지도로"}</button>}
             {!letter.custom && !epilogue && <button className="btn ghost" onClick={fly}>다시 날기</button>}
           </div>
         </main>

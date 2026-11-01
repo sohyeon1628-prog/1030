@@ -91,7 +91,6 @@ h1 { margin: 6px 0 2px; font-size: 32px; }
 .chip.on { box-shadow: 0 0 0 2px var(--red); font-weight: 700 !important; }
 .chip small { color: var(--dim); font-size: 11px; }
 .sw { width: 14px; height: 14px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px rgba(20,80,120,.25); }
-.count { color: var(--dim); text-align: right; font-weight: 400; }
 
 .card { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; text-align: left;
   background: var(--cream); border: 0; border-radius: 20px; padding: 14px 18px; color: var(--ink); font: inherit;
@@ -186,51 +185,18 @@ h1 { margin: 6px 0 2px; font-size: 32px; }
 .intro-cap.tag { font-family: var(--display); font-size: clamp(20px, 3vw, 28px); color: var(--red); padding: 10px 28px; }
 .intro-title { position: absolute; left: 0; right: 0; top: 16vh; z-index: 3; text-align: center; margin: 0; font-size: clamp(34px, 6vw, 60px); }
 .intro-skip { top: 16px; right: 16px; z-index: 4; }
+.intro-back { top: 16px; left: 16px; z-index: 4; }
 .intro-hint { position: absolute; left: 0; right: 0; bottom: 3.2vh; z-index: 3; margin: 0; text-align: center; color: #eaf8ff; font-size: 12px; text-shadow: 0 1px 0 rgba(20, 80, 120, .5); }
 .intro-start { position: absolute; left: 50%; bottom: 3.5vh; translate: -50% 0; z-index: 4; }
 .intro-start:hover:not(:disabled) { transform: translateY(-2px); }
 
-/* 나의 이야기 설정 */
+/* 폼 */
 .form h3 { margin: 6px 0 0; font-size: 16px; color: var(--ink); text-shadow: none; }
 .form small { font-weight: 400; color: var(--dim); font-size: 11px; margin-left: 6px; }
-.person { border: 0; background: rgba(79, 179, 217, .12); border-radius: 22px; padding: 14px 14px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-.person legend { float: none; width: auto; padding: 0 8px; font-weight: 800; color: var(--red); background: var(--cream); border-radius: 99px; font-size: 13px; }
-.person.locked { opacity: .55; }
-.person select, .form select { border: 0; border-radius: 14px; padding: 11px 12px; font: inherit; background: var(--cream); color: var(--ink); box-shadow: inset 0 2px 6px rgba(20,80,120,.12); }
-.person input, .person textarea { background: #fff; }
-.more { display: flex; flex-direction: column; gap: 10px; }
-.more > summary { cursor: pointer; font-weight: 700; color: var(--dim); font-size: 14px; }
-.more[open] > summary { margin-bottom: 4px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
-.row.between { justify-content: space-between; align-items: flex-start; flex-wrap: nowrap; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip-btn { border: 0; border-radius: 99px; padding: 5px 11px; font: inherit; font-size: 12px; background: var(--cream); color: var(--dim); cursor: pointer; }
-.chip-btn.on { background: var(--red); color: #fff; font-weight: 700; }
-.movers { display: flex; flex-direction: column; gap: 4px; }
-.movers button { border: 0; border-radius: 8px; width: 30px; height: 24px; background: var(--cream); color: var(--dim); cursor: pointer; }
-.movers button:disabled { opacity: .35; cursor: default; }
+.form select { border: 0; border-radius: 14px; padding: 11px 12px; font: inherit; background: var(--cream); color: var(--ink); box-shadow: inset 0 2px 6px rgba(20,80,120,.12); }
 .err { margin: 0; color: var(--red); font-weight: 700; font-size: 13px; }
 
-/* 대화형 오프닝: 해무가 묻고, 칩을 누르면 바로 다음으로 */
-.dialogue { position: absolute; left: 50%; bottom: 5vh; translate: -50% 0; z-index: 5; width: min(620px, 92vw); max-height: 80vh; overflow: auto;
-  background: rgba(250, 246, 234, .96); border-radius: 28px; padding: 16px 20px 14px; box-shadow: 0 14px 34px rgba(20, 80, 120, .35); cursor: default; }
-.dialogue .speaker { margin: 0 0 4px; font-family: var(--display); color: var(--red); font-size: 14px; }
-.dialogue .speaker small { color: var(--dim); font-family: var(--sans); margin-left: 6px; }
-.dialogue .say { margin: 0 0 10px; font-family: var(--serif); font-size: clamp(15px, 2.1vw, 18px); line-height: 1.75; color: var(--ink); }
-.dialogue .reply { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.dialogue .reply.col { flex-direction: column; align-items: stretch; gap: 8px; }
-.dialogue input { flex: 1; min-width: 140px; border: 0; border-radius: 99px; padding: 11px 16px; font: inherit; background: #fff; color: var(--ink);
-  box-shadow: inset 0 2px 6px rgba(20, 80, 120, .14); outline: none; user-select: text; }
-.dialogue input:focus { box-shadow: inset 0 2px 6px rgba(20, 80, 120, .14), 0 0 0 2px var(--sky); }
-.dialogue .btn { padding: 10px 20px; font-size: 15px; white-space: nowrap; }
-.dialogue .chip-btn { background: #fff; box-shadow: 0 2px 0 #d9c3a0; font-size: 13px; padding: 7px 14px; }
-.dialogue .chip-btn.big { font-size: 15px; padding: 11px 20px; font-weight: 700; color: var(--ink); }
-.dialogue .chip-btn:hover { background: var(--red); color: #fff; }
-.dialogue .err { margin: 6px 0 0; }
 .linkbtn { display: block; margin: 10px auto 0; border: 0; background: none; color: var(--dim); font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
-.island-tag { position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none; background: var(--cream); color: var(--ink); font-family: var(--display); font-size: 15px;
-  padding: 5px 14px; border-radius: 99px; box-shadow: 0 4px 0 #b9d3e0, 0 8px 14px rgba(20, 80, 120, .3); }
 
 /* 메인 화면: 글자 대신 아이콘 (핀 / 버튼 / 진행도) */
 .pin { position: absolute; left: 0; top: 0; z-index: 2; border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; color: var(--red); }
@@ -254,13 +220,15 @@ h1 { margin: 6px 0 2px; font-size: 32px; }
 .dock-btn { position: relative; width: 64px; height: 64px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--cream); color: var(--dim); cursor: pointer;
   box-shadow: inset 0 3px 0 rgba(255,255,255,.8), 0 5px 0 #b9d3e0, 0 10px 18px rgba(20,80,120,.28); transition: transform .2s; }
 .dock-btn:hover:not(:disabled) { transform: translateY(-2px); } .dock-btn:active:not(:disabled) { transform: translateY(3px); }
-.dock-btn.primary { background: var(--red); color: #fff; box-shadow: inset 0 3px 0 rgba(255,255,255,.3), 0 5px 0 var(--red-deep), 0 10px 18px rgba(150,40,20,.3); }
-.dock-btn.primary:disabled { background: #8fb9cf; box-shadow: 0 4px 0 #6f9bb3; cursor: default; }
-.dock-btn.glow { animation: glow 1.8s ease-in-out infinite; }
 @keyframes glow { 50% { box-shadow: inset 0 3px 0 rgba(255,255,255,.3), 0 5px 0 var(--red-deep), 0 0 0 8px rgba(232,85,58,.25); } }
-.dock-lock { position: absolute; right: 2px; bottom: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--cream); color: var(--dim); display: grid; place-items: center; }
 .dock-badge { position: absolute; right: -2px; top: -2px; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 99px; background: var(--red); color: #fff; font: 800 12px/22px var(--sans); text-align: center; }
-@media (prefers-reduced-motion: reduce) { .pin.target .pin-ico::after, .dock-btn.glow { animation: none; } }
+/* 편지섬 핀: 이야기 섬의 핀보다 크고 빨간색이라 한눈에 들어온다. 닫혀 있을 땐 작은 자물쇠 */
+.pin.post:not(.locked) .pin-ico { width: 46px; height: 46px; background: var(--red); color: #fff; box-shadow: 0 4px 0 var(--red-deep), 0 8px 16px rgba(150, 40, 20, .35); }
+.pin.post.locked .pin-ico { width: 26px; height: 26px; background: rgba(250, 246, 234, .85); color: var(--dim); }
+.pin.post.locked .pin-tip { display: none; }
+.pin.post.locked:hover .pin-tip, .pin.post.locked:focus-visible .pin-tip { display: block; opacity: 1; }
+.pin.post:not(.locked) .pin-tip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .pin.target .pin-ico::after { animation: none; } }
 
 /* 3줄 비행: ▲▼ 버튼, 기억 구슬 표시 */
 .lane-btns { position: absolute; right: 16px; bottom: 28px; z-index: 6; display: flex; flex-direction: column; gap: 14px; }
@@ -271,14 +239,23 @@ h1 { margin: 6px 0 2px; font-size: 32px; }
 .orbs-row span { width: 14px; height: 14px; border-radius: 50%; background: rgba(250,246,234,.4); box-shadow: inset 0 1px 2px rgba(20,80,120,.3); }
 .orbs-row span.on { background: #ffd166; box-shadow: 0 0 10px rgba(255,209,102,.9); }
 .memory { margin: 8px 0 0; font-family: var(--serif); color: var(--red); }
-.chip.locked { opacity: .55; cursor: default; } .chip .need { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; }
-.stamp.orb b { color: #d99a1a; }
+.orb-card { background: var(--cream); border-radius: 20px; padding: 14px 16px; box-shadow: 0 8px 20px rgba(20,80,120,.12); display: flex; flex-direction: column; gap: 8px; }
+.orb-card p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.orb-card small { margin: 0; font-size: 12px; color: var(--dim); }
+.orb-head { display: flex; align-items: baseline; gap: 8px; }
+.orb-head b { font-size: 26px; color: #d99a1a; } .orb-head span:last-child { font-size: 13px; color: var(--dim); }
+.orb-dot { width: 14px; height: 14px; border-radius: 50%; align-self: center; background: radial-gradient(circle at 35% 35%, #fff3b8, #ffd166 60%, #e8a93a); box-shadow: 0 0 8px rgba(255,209,102,.9); }
+.orb-bar { height: 8px; border-radius: 99px; background: rgba(31,74,99,.14); overflow: hidden; }
+.orb-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #ffd166, #f1a24a); transition: width .5s ease; }
+.orb-rewards { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.orb-rewards li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--dim); }
+.orb-rewards li.on { color: var(--ink); font-weight: 700; }
+.orb-rewards em { font-style: normal; font-weight: 400; font-size: 12px; color: var(--dim); margin-left: auto; }
+.orb-rewards .sw { width: 14px; height: 14px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(31,74,99,.25); }
+.orb-rewards .sw.memo { background: radial-gradient(circle at 35% 35%, #fff3b8, #ffd166); }
 
 /* 링크로 편지 보내기 */
 .world3d.off .pin { display: none; }
-.chip.big { padding: 10px 16px; } .chip.big small { display: block; margin-left: 6px; }
-.to-row { display: flex; gap: 8px; align-items: center; }
-.to-row input { flex: 1; min-width: 0; }
 .share-list { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 .share-list .who { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 4.5em; text-align: right; flex: none; }
 .sharebox { display: flex; gap: 8px; align-items: center; width: min(520px, 92vw); }
@@ -335,7 +312,6 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .paper:not(.story):not(.reply):not(.opening)::after { content: ""; position: absolute; top: 8px; right: 10px; width: 30px; height: 36px; border-radius: 3px; background: radial-gradient(circle at 50% 38%, #ffd166 0 28%, #5ec9a7 30% 60%, transparent 62%), #fdf3d4; outline: 2px dotted #c9b99a; outline-offset: 1px; transform: rotate(4deg); }
 .pin-tip { border-radius: 4px; padding: 14px 14px 6px; background: #f7efd9; border: 1px solid #e3d5ae; overflow: hidden; }
 .pin-tip::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 10px; background: #e8d9ae; clip-path: polygon(0 0, 100% 0, 50% 100%); }
-.chip-btn:disabled { opacity: .35; cursor: default; text-decoration: line-through; }
 
 /* 오프닝 자막은 위쪽에 뜬다(아래는 대화 상자 자리) */
 .intro-cap { top: 9vh; bottom: auto; }
@@ -343,5 +319,105 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .intro-tags { position: absolute; left: 50%; top: 9vh; translate: -50% 0; z-index: 3; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: min(760px, 92vw); }
 .intro-tags .intro-cap { position: static; translate: none; }
 .intro-title { top: 22vh; }
-.dialogue .chip-btn.on { background: var(--red); color: #fff; }
 .intro-cap { text-wrap: balance; word-break: keep-all; max-width: min(720px, 90vw); }
+/* 오프닝 자막은 세 가지로 나눠 보여 준다. 나레이션: 위쪽 어두운 띠 / 해무의 말: 아래쪽 이름표 달린 말풍선 / 섬 소개: 작은 한 줄 */
+.intro-cap.narr { top: 9vh; bottom: auto; background: rgba(18, 52, 78, .64); color: #fff; box-shadow: none; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  border-radius: 18px; padding: 12px 22px; font-size: clamp(14px, 1.9vw, 17px); line-height: 1.75; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+.intro-cap.say { top: auto; bottom: 11vh; width: min(680px, 92vw); text-align: center; padding: 26px 28px 16px; border-radius: 22px; }
+.intro-cap.say .who { position: absolute; top: -13px; left: 50%; translate: -50% 0; white-space: nowrap; background: var(--red); color: #fff; font: 13px var(--display); padding: 3px 14px; border-radius: 99px; box-shadow: 0 3px 0 var(--red-deep); }
+.intro-cap.say p { margin: 0; }
+.intro-tags { flex-wrap: nowrap; gap: 6px; max-width: 96vw; }
+.intro-tags .intro-cap.tag { font-size: clamp(11px, 1.5vw, 15px); padding: 7px 13px; border-radius: 99px; white-space: nowrap; box-shadow: 0 4px 14px rgba(20, 80, 120, .28); }
+@media (max-width: 640px) { .intro-tags { flex-direction: column; align-items: center; } }
+
+
+/* ── 편지 쓰기: 한 화면에 질문 하나. 입체 카드·종이가 마우스를 따라 살짝 기울고, 부치면 봉투가 날아간다 ── */
+.wt { gap: 10px; }
+.wt-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 640px; width: 100%; margin: 0 auto; }
+.wt-back { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--cream); color: var(--dim); font: 400 30px/1 var(--display); cursor: pointer; flex: none;
+  box-shadow: 0 4px 0 #b9d3e0, 0 8px 14px rgba(20, 80, 120, .22); transition: transform .15s; }
+.wt-back:hover { transform: translateY(-2px); } .wt-back:active { transform: translateY(3px); box-shadow: 0 1px 0 #b9d3e0; }
+.wt-back.ghost { visibility: hidden; }
+.wt-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; perspective: 1100px; }
+.wt-tilt { display: flex; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 700px; transform-style: preserve-3d;
+  transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform .18s ease-out; animation: wt-in .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes wt-in { from { opacity: 0; transform: translateY(24px) rotateX(14deg) scale(.96); } to { opacity: 1; } }
+.wt-title { margin: 0; font-size: clamp(26px, 5vw, 38px); text-align: center; transform: translateZ(30px); }
+.wt-hint { margin: 0; color: #eaf8ff; font-size: 13px; text-align: center; text-shadow: 0 1px 0 rgba(20, 80, 120, .4); }
+.wt-hint.warn { color: #ffd9bd; font-weight: 700; }
+
+
+
+/* 편지지 */
+.wt-paper { width: min(560px, 92vw); max-width: none; padding: 26px 28px 14px; background-image: none; transform: translateZ(14px) rotateX(5deg); transform-origin: 50% 100%;
+  box-shadow: 0 2px 0 #e9dcc0, 0 5px 0 #e2d3b3, 0 8px 0 #d9c9a5, 0 28px 38px rgba(20, 80, 120, .38); }
+.wt-dear { display: flex; align-items: baseline; gap: 6px; font: 400 20px var(--display); color: var(--red); margin-bottom: 4px; }
+.wt-paper textarea { display: block; width: 100%; min-height: clamp(170px, 30vh, 260px); border: 0; outline: none; resize: none; padding: 0; color: var(--ink); user-select: text;
+  background: repeating-linear-gradient(transparent 0 33px, rgba(90, 163, 212, .3) 33px 34px) local; font: 17px/34px var(--serif); }
+.wt-papers { display: flex; justify-content: center; gap: 12px; transform: translateZ(24px); }
+.wt-swatch { position: relative; width: 46px; height: 46px; border-radius: 14px; border: 0; background: var(--c); cursor: pointer; transition: transform .15s;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .8), 0 5px 0 rgba(20, 80, 120, .28), 0 10px 14px rgba(20, 80, 120, .2); }
+.wt-swatch:hover:not(:disabled) { transform: translateY(-3px); } .wt-swatch.on { outline: 3px solid var(--red); outline-offset: 3px; }
+.wt-swatch.locked { filter: grayscale(.7); opacity: .65; cursor: default; }
+.wt-swatch .need { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 2px; font: 700 12px var(--sans); color: var(--ink); }
+
+/* 도착 시각 */
+
+/* 부치는 연출: 화면이 어두워지고 봉투가 떠올라 날아간다 */
+.wt-send { position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(20, 70, 100, .55); perspective: 800px; animation: fadein .25s ease both; }
+.wt-send p { margin: 0; color: var(--cream); font: 400 20px var(--display); text-shadow: 0 3px 0 rgba(20, 80, 120, .5); }
+.wt-envelope { width: 150px; height: 110px; border-radius: 18px; display: grid; place-items: center; color: var(--red); background: linear-gradient(#fffaf0, #f3e7cf); box-shadow: inset 0 3px 0 #fff, 0 8px 0 #d9c3a0, 0 24px 34px rgba(0, 0, 0, .35); animation: wt-fly 1.3s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes wt-fly { 0% { transform: translateY(60px) rotateX(55deg) scale(.4); opacity: 0; } 30% { transform: translateY(0) rotateX(0) scale(1); opacity: 1; } 62% { transform: translateY(-6px) rotateZ(-4deg) scale(1.04); } 100% { transform: translateY(-62vh) rotateZ(-14deg) rotateX(20deg) scale(.45); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .wt-tilt, .wt-envelope { animation: none; } .wt-tilt { transform: none; } }
+@media (max-width: 560px) { .wt-mode { width: 100%; flex-direction: row; text-align: left; padding: 14px 16px; gap: 14px; } .wt-mode .ico { width: 54px; height: 54px; flex: none; } .wt-modes { width: min(420px, 92vw); } }
+/* 에필로그 끝: 편지섬으로 줌인한 3D 장면 위에 편지 쓰기 화면이 겹쳐 나온다 */
+.epi.zoomed { cursor: auto; }
+.epi-write { position: absolute; inset: 0; z-index: 5; overflow: auto; display: flex; flex-direction: column; animation: fadein .7s ease both;
+  background: linear-gradient(rgba(20, 70, 100, .1), rgba(20, 70, 100, .4)); }
+.epi-write .screen { flex: 1; height: auto; min-height: 100%; }
+
+/* 자막은 문장마다 줄을 바꾸고 가운데 정렬한다. 문장 안에서는 단어 단위로만 줄이 바뀐다 */
+.intro-cap .cap-s { display: block; text-wrap: balance; word-break: keep-all; }
+.intro-cap .cap-s + .cap-s { margin-top: 4px; }
+
+/* 편지 쓰기(화면 하나): 편지지 머리의 "누구에게" 입력, 보내기 버튼 둘, 애니메이션 시트 */
+.wt-dear input { flex: 0 1 230px; min-width: 0; border: 0; border-bottom: 2px dashed rgba(217, 69, 44, .45); background: transparent; outline: none; color: var(--red); font: inherit; padding: 2px 4px; user-select: text; }
+.wt-dear input::placeholder { color: rgba(217, 69, 44, .4); }
+.wt-dear input:focus { border-bottom-color: var(--red); }
+.wt-foot { text-align: right; font: 12px var(--sans); color: var(--dim); }
+.wt-hint.dark { color: var(--dim); text-shadow: none; }
+.wt-send-btns { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(420px, 92vw); transform: translateZ(26px); }
+.wt-send-btns .btn { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.wt-main { font-size: 21px; padding: 16px 30px; }
+.wt-sub { font-size: 17px; padding: 12px 24px; }
+.wt-voice { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.wt-hint.small { font-size: 12px; margin-top: -4px; }
+
+/* 도착 연출 고르기: 장면 세 가지 + 내 목소리 */
+.wt-arrival { width: min(560px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 14px 12px; border-radius: 24px; background: rgba(250, 246, 234, .94); box-shadow: 0 10px 24px rgba(20, 80, 120, .25); transform: translateZ(24px); }
+.wt-arrival h3 { margin: 0; font: 400 17px var(--display); color: var(--red); }
+.wt-scenes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+.wt-scene { border: 0; border-radius: 18px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; font: inherit; color: var(--ink); text-align: center;
+  background: linear-gradient(#fffaf0, #f3e7cf); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .85), 0 4px 0 #d9c3a0, 0 8px 12px rgba(20, 80, 120, .16); transition: transform .15s; }
+.wt-scene:hover { transform: translateY(-2px); }
+.wt-scene .ico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--tone); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .3), 0 3px 0 rgba(0, 0, 0, .2); }
+.wt-scene b { font: 400 14px var(--display); } .wt-scene small { font-size: 11px; color: var(--dim); line-height: 1.35; }
+.wt-scene.on { background: linear-gradient(#ffe9e2, #ffd2c6); box-shadow: inset 0 3px 0 rgba(255, 255, 255, .7), 0 4px 0 var(--red), 0 8px 12px rgba(150, 40, 20, .22); }
+.wt-arrival .btn { padding: 9px 16px; font-size: 14px; }
+.wt-arrival .wt-hint { color: var(--dim); text-shadow: none; }
+@media (max-width: 480px) { .wt-scene small { display: none; } }
+
+/* 받는 사람 화면: 도착 안내와 마음 돌려보내기 */
+.receive-title { margin: 0; text-align: center; font-size: clamp(22px, 5vw, 30px); }
+.reactions { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.react-btn { border: 0; border-radius: 99px; padding: 10px 20px; font: 400 17px var(--display); background: var(--cream); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 0 #b9d3e0, 0 10px 14px rgba(20, 80, 120, .2); transition: transform .15s; }
+.react-btn:hover { transform: translateY(-2px); } .react-btn.on { background: var(--red); color: #fff; box-shadow: 0 4px 0 var(--red-deep), 0 10px 14px rgba(150, 40, 20, .25); }
+.reaction-got { font-size: 20px; line-height: 1; }
+
+/* 병 편지 에필로그: 끝에서 노을빛이 화면을 덮고, 열린 결말의 한 줄과 버튼이 나온다 */
+.bottle-fade { position: absolute; inset: 0; z-index: 4; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, #fff6dc 0%, #ffe3b8 55%, #ffd2a0 100%); }
+.bottle-end { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; text-align: center; padding: 24px; }
+.bottle-end p { margin: 0; font: 400 clamp(20px, 3.4vw, 28px) var(--display); color: #8a4a2a; text-shadow: 0 2px 0 rgba(255, 255, 255, .6); text-wrap: balance; word-break: keep-all; }
+.intro.bottle.ended { cursor: auto; }
+.bottle-cut { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; background: #1b1a2e; }   /* 컷이 바뀔 때 잠깐 어두워졌다 돌아온다 */

@@ -185,7 +185,33 @@ function Stop({ i, letter, grade, locked, target, onOpen }) {
   );
 }
 
-export default function WorldMap({ letters, grades, isUnlocked, onOpen }) {
+// 편지섬(대체 지도): 내 편지를 쓰는 곳. 네 통을 모두 전하기 전에는 흐릿하게 잠겨 있다.
+const POST_SPOT = { x: 11.4, y: -1.6 };
+function PostStop({ open, onOpen }) {
+  const { x, y } = POST_SPOT, act = () => open && onOpen();
+  const [lx, ly] = P(x + BLOCK / 2, y + BLOCK + 0.5, 0);
+  return (
+    <g className={`stop ${open ? "" : "locked"}`} role="button" tabIndex={open ? 0 : -1} aria-disabled={!open}
+      aria-label={open ? "편지섬: 내 편지 쓰기" : "편지섬: 네 통의 편지를 모두 전하면 열려요"}
+      onClick={act} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && act()}>
+      <g filter={open ? undefined : "url(#desat)"}>
+        <Slab x={x} y={y} w={BLOCK} d={BLOCK} h={0.55} c={COLORS.rust} rd={14} />
+        <Slab x={x + 0.1} y={y + 0.1} z={0.55} w={BLOCK - 0.2} d={BLOCK - 0.2} h={0.5} c={COLORS.orange} rd={14} />
+        <Slab x={x + 0.05} y={y + 0.05} z={1.05} w={BLOCK - 0.1} d={BLOCK - 0.1} h={0.28} c={COLORS.green} rd={12} />
+        <Slab x={x + 0.7} y={y + 0.6} z={1.33} w={1.2} d={1.1} h={0.8} c={COLORS.cream} rd={8} />
+        <Slab x={x + 0.6} y={y + 0.5} z={2.13} w={1.4} d={1.3} h={0.34} c={COLORS.red} rd={9} />
+        <Slab x={x + 2.0} y={y + 1.7} z={1.33} w={0.4} d={0.36} h={0.7} c={COLORS.red} rd={6} />
+      </g>
+      <g transform={`translate(${lx} ${ly})`}>
+        <rect x="-80" y="-17" width="160" height="42" rx="21" fill="#faf3e6" />
+        <text y="-1" textAnchor="middle" fontSize="14" fontWeight="800" fill={open ? "#d9452c" : "#6b2f1f"}>편지섬</text>
+        <text y="16" textAnchor="middle" fontSize="10.5" fill="#9a6a52">{open ? "내 편지 쓰기" : "네 통을 모두 전하면 열려요"}</text>
+      </g>
+    </g>
+  );
+}
+
+export default function WorldMap({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost }) {
   const target = letters.findIndex((l) => !grades[l.id]);
   const anyDone = Object.keys(grades).length > 0;
   const road = "M" + P(0, 2.8, 0.02).join(" ") + " L" + P(13, 2.8, 0.02).join(" ");
@@ -195,7 +221,8 @@ export default function WorldMap({ letters, grades, isUnlocked, onOpen }) {
   const back = [
     { d: 5, el: <g key="pond"><Slab x={4.8} y={-2.9} z={0} w={2.6} d={1.3} h={0.08} c={["#6fb4e0", "#5aa3d4", "#4a8cb8"]} rd={8} /></g> },
     ...SPOTS.map((s, i) => s.y < 2 && { d: s.x + s.y, el: <Stop key={`s${i}`} i={i} letter={letters[i]} grade={grades[letters[i].id]} locked={!isUnlocked(i)} target={i === target} onOpen={() => onOpen(letters[i])} /> }),
-    { d: 4, el: <Cactus key="c1" x={3.4} y={0.2} /> }, { d: 12, el: <Cactus key="c2" x={11.6} y={0.6} s={1.1} /> },
+    { d: POST_SPOT.x + POST_SPOT.y, el: <PostStop key="post" open={postOpen} onOpen={() => onPost?.()} /> },
+    { d: 4, el: <Cactus key="c1" x={3.4} y={0.2} /> }, { d: 12, el: <Cactus key="c2" x={11.6} y={-2.5} s={1.1} /> },
   ].filter(Boolean).sort((a, b) => a.d - b.d);
 
   const front = [

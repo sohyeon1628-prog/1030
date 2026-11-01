@@ -2,17 +2,27 @@ import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { MOODS, DEFAULT_PARTY } from "../party/config.js";
 import { createPlayer } from "../party/audio.js";
-import { mesh, box, puck, palm, bush, waterTexture, makePostman, animatePostman } from "../three/parts.js";
+import { mesh, box, puck, palm, bush, waterTexture, makePostman, animatePostman, makeEnvelope } from "../three/parts.js";
+import { COLORS, addBanner, buildStage } from "./partyStages.js";
+import { josa } from "../data/chapters.js";
 import Icon from "./Icon.jsx";
 
-// 항구 파티: 도착한 섬의 선착장에서 마을 친구들이 내가 꾸민 파티를 열고, 녹음한 목소리(없으면 기본 노래)에 맞춰 입을 움직인다.
+// 도착 영상(intro): 받는 사람이 링크를 열면 먼저 해무가 편지를 들고 멀리서 날아와 무대에 내려앉는다(ARRIVE초). 그 뒤에 노래가 시작되고, 끝나면 onDone(편지가 열린다).
+const ARRIVE = 6;
+const sm01 = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+
+// 파티: 콘셉트(무대)에 따라 섬 위 항구의 마을 친구들 / 바닷속의 해무와 바다 친구들 / 하늘 위 구름 무대의 갈매기 친구들이 모여, 녹음한 목소리(없으면 기본 노래)에 맞춰 노래한다.
 // 입모양 1단계: 지금 소리의 크기에 맞춰 입이 열리고 닫힌다. 노래가 끝나면 onDone(편지가 열린다).
 const SKY = {
   day: { bg: "#bfe6f5", hemi: [0xe4f6ff, 0x4aa3cf, 1.1], sun: [0xfff4e0, 2.2], fog: 60 },
   dusk: { bg: "#f6b48c", hemi: [0xffd2a8, 0x7a6aa0, 0.95], sun: [0xffc890, 1.8], fog: 55 },
   night: { bg: "#151a45", hemi: [0x8aa0ff, 0x1b2150, 0.55], sun: [0x9fb4ff, 0.7], fog: 45 },
 };
-const COLORS = ["#e8553a", "#5aa3d4", "#ffd166", "#5ec9a7", "#c78fe0", "#f59a4a", "#8fb4dc"];
+// 바닷속·하늘 위 무대는 하늘 설정과 무관하게 자기 빛과 안개를 쓴다(바닷속은 안개가 가깝고 푸르다)
+const STAGE_SKY = {
+  sea: { bg: "#0b6aa0", hemi: [0x8fd8ff, 0x0a3a66, 1.0], sun: [0xcfeeff, 1.3], fog: 14, near: 3 },
+  sky: { bg: "#9fd8ff", hemi: [0xf4fbff, 0x8fb8e8, 1.15], sun: [0xfff4e0, 2.0], fog: 70, near: 20 },
+};
 const SKINS = ["#f6d2b0", "#e9b98f", "#f3c9a8", "#d9a77c"];
 // 섬 친구들: 우체부처럼 큰 머리의 장난감 사람들. 저마다 다른 일을 하며 노래한다.
 // 0 탬버린, 1 춤, 2 박수, 3 손 흔들기, 4 마라카스, 5 폴짝폴짝
@@ -149,12 +159,13 @@ function bannerTexture(text) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 
-export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, from = "", preview = false, onDone, onClose }) {
+export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, from = "", preview = false, intro = false, onDone, onClose }) {
   const wrap = useRef(null);
   const doneRef = useRef(onDone); doneRef.current = onDone;
   const [ended, setEnded] = useState(false);
   const [round, setRound] = useState(0);          // 다시 보기(미리보기)마다 증가
   const [fail, setFail] = useState(false);
+  const [landed, setLanded] = useState(!intro);    // 해무가 내려앉았는가(intro가 아니면 처음부터 true)
   const P = { ...DEFAULT_PARTY, ...party };
 
   useEffect(() => {
@@ -165,17 +176,22 @@ export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, fro
     renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     el.prepend(renderer.domElement); renderer.domElement.className = "w3d-canvas";
 
-    const sk = SKY[P.sky] || SKY.day, mood = MOODS.find((m) => m.id === P.mood) || MOODS[1];
+    const stage = P.stage || "island";
+    const sk = STAGE_SKY[stage] || SKY[P.sky] || SKY.day, mood = MOODS.find((m) => m.id === P.mood) || MOODS[1];
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(sk.bg); scene.fog = new THREE.Fog(sk.bg, 14, sk.fog + 20);
+    scene.background = new THREE.Color(sk.bg); scene.fog = new THREE.Fog(sk.bg, sk.near ?? 14, sk.fog + (sk.near ? 0 : 20));
     const cam = new THREE.PerspectiveCamera(42, 1, 0.1, 300);
     scene.add(new THREE.HemisphereLight(sk.hemi[0], sk.hemi[1], sk.hemi[2]));
     const sun = new THREE.DirectionalLight(sk.sun[0], sk.sun[1]); sun.position.set(-5, 10, 8); sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 12, bottom: -12, near: 1, far: 40 }); sun.shadow.bias = -0.0005;
     scene.add(sun);
 
+    const anim = [];
+    let vill = [], pm = null, pmMouth = null, wtex = null, stageApi = null, hm = null, hmMouth = null;
+    if (stage !== "island") { stageApi = buildStage(stage, { scene, world: scene, P, anim }); if (intro) { hm = stageApi.haemu.pm; hmMouth = stageApi.haemu.mouth; } }
+    if (stage === "island") {
     // 바다와 항구 섬, 선착장
-    const wtex = waterTexture();
+    wtex = waterTexture();
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ map: wtex, roughness: 0.3, transparent: true, opacity: 0.9, color: P.sky === "night" ? "#5c6fa8" : P.sky === "dusk" ? "#ffd2c8" : "#ffffff" }));
     sea.rotation.x = -Math.PI / 2; sea.receiveShadow = true; scene.add(sea);
     const world = new THREE.Group(); scene.add(world);
@@ -191,52 +207,25 @@ export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, fro
 
 
     // 마을 친구들: 7명이 반원으로 모여 노래한다
-    const vill = Array.from({ length: 6 }, (_, i) => {
+    vill = Array.from({ length: 6 }, (_, i) => {
       const v = makeVillager(i, P.outfit), a = (-0.5 + i / 5) * 2.2;
       v.scale.setScalar(0.78); v.position.set(Math.sin(a) * 2.3, deckY, 1.5 + (1 - Math.cos(a)) * 0.6 + (i % 2) * 0.5); v.rotation.y = -a * 0.35;
       world.add(v); return { v, ph: i * 0.9 };
     });
 
     // 우체부: 친구들 앞에 떠서(나는 모습 그대로) 함께 노래한다
-    const pm = makePostman(); pm.scale.setScalar(0.62); pm.children[0].rotation.z = -0.08; pm.rotation.y = -Math.PI / 2 + 0.2; pm.position.set(0, 0.95, 3.3);
-    const pmMouth = mesh(new THREE.SphereGeometry(0.07, 12, 10), "#6b2f2f", 0.31, -0.14, 0); pmMouth.scale.set(0.45, 0.3, 1); pm.userData.head.add(pmMouth);
+    pm = makePostman(); pm.scale.setScalar(0.62); pm.children[0].rotation.z = -0.08; pm.rotation.y = -Math.PI / 2 + 0.2; pm.position.set(0, 0.95, 3.3);
+    pmMouth = mesh(new THREE.SphereGeometry(0.07, 12, 10), "#6b2f2f", 0.31, -0.14, 0); pmMouth.scale.set(0.45, 0.3, 1); pm.userData.head.add(pmMouth);
     pm.traverse((o) => { o.castShadow = true; }); world.add(pm);
 
-    // 장식
-    const anim = [];
-
-    // 현수막: 두 기둥 사이에 늘어진 두툼한 천. 바람에 살랑이고, 위에는 삼각 깃발 줄이 걸린다
-    {
-      const BW = 4.2, BH = 1.05, bx0 = -2.45, by = 2.7, bz = -0.9;
-      [-1, 1].forEach((sd) => {
-        world.add(mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.9, 12), "#8a5a2b", sd * 2.45, 1.85, bz), mesh(new THREE.SphereGeometry(0.13, 14, 10), "#ffd166", sd * 2.45, 3.85, bz, { metalness: 0.4, roughness: 0.35 }), puck(0.3, 0.18, 0.1, "#6d4521", sd * 2.45, 0.38, bz));
-      });
-      const geo = new THREE.PlaneGeometry(BW, BH, 28, 6), base = geo.attributes.position.array.slice();
-      const btex = bannerTexture(P.banner.trim() || "축하해요");
-      const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: btex, emissiveMap: btex, emissive: "#ffffff", emissiveIntensity: 0.5, side: THREE.DoubleSide, roughness: 0.85 }));
-      cloth.castShadow = true; cloth.receiveShadow = true; world.add(cloth);
-      const rope = (y0, sag, col) => {                                // 기둥 사이의 줄
-        const pts = Array.from({ length: 21 }, (_, n) => { const u = n / 20 * 2 - 1; return new THREE.Vector3(u * 2.45, y0 - sag * (1 - u * u), bz + 0.05); });
-        world.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.018, 6), new THREE.MeshStandardMaterial({ color: col, roughness: 0.8 })));
-      };
-      rope(3.6, 0.15, "#f2e2bd");
-      const flags = Array.from({ length: 11 }, (_, n) => {              // 삼각 깃발
-        const u = (n / 10) * 2 - 1, fx = u * 2.3, fy = 3.6 - 0.15 * (1 - u * u);
-        const tri = new THREE.Shape(); tri.moveTo(-0.14, 0); tri.lineTo(0.14, 0); tri.lineTo(0, -0.3);
-        const f = new THREE.Mesh(new THREE.ShapeGeometry(tri), new THREE.MeshStandardMaterial({ color: COLORS[n % COLORS.length], side: THREE.DoubleSide, roughness: 0.8 }));
-        f.position.set(fx, fy - 0.02, bz + 0.07); f.castShadow = true; world.add(f); return { f, n };
-      });
-      [-1, 1].forEach((sd) => { const tas = mesh(new THREE.ConeGeometry(0.07, 0.24, 10), "#ffd166", sd * (BW / 2 - 0.05), by - BH / 2 - 0.12, bz + 0.05); tas.rotation.x = Math.PI; world.add(tas); });
-      anim.push((t) => {                                               // 가운데는 처지고 바람에 물결친다
-        const pos = geo.attributes.position;
-        for (let n = 0; n < pos.count; n++) {
-          const x = base[n * 3], y = base[n * 3 + 1], u = x / (BW / 2);
-          pos.setXYZ(n, x, y + by - 0.22 * (1 - u * u), bz + Math.sin(x * 2.2 + t * 1.6) * 0.07 * (1 - u * u * 0.3) + (y / BH) * 0.05);
-        }
-        pos.needsUpdate = true; geo.computeVertexNormals();
-        flags.forEach(({ f, n }) => { f.rotation.z = Math.sin(t * 2 + n) * 0.12; });
-      });
+    if (intro) {                                                 // 섬 위 무대의 해무: 항구 한쪽에 내려앉는다
+      hm = makePostman({ elder: true }); hm.scale.setScalar(0.62); hm.children[0].rotation.z = -0.08; hm.rotation.y = -Math.PI / 2 - 0.15; hm.position.set(-1.7, 0.95, 3.4);
+      hmMouth = mesh(new THREE.SphereGeometry(0.07, 12, 10), "#6b2f2f", 0.31, -0.14, 0); hmMouth.scale.set(0.45, 0.3, 1); hm.userData.head.add(hmMouth);
+      hm.traverse((o) => { o.castShadow = true; }); world.add(hm);
     }
+    // 장식
+
+    addBanner(world, anim, P.banner.trim() || "축하해요");
     const deco = P.deco;
     if (deco === "balloon") {
       for (let i = 0; i < 12; i++) {
@@ -285,34 +274,60 @@ export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, fro
       world.add(new THREE.Points(geo, new THREE.PointsMaterial({ color: "#fff6c9", size: 0.5, transparent: true, opacity: 0.9, depthWrite: false, fog: false })));
       world.add(mesh(new THREE.SphereGeometry(2, 20, 16), "#fff3c9", 14, 16, -45, { emissive: "#fff3c9", emissiveIntensity: 0.9 }));
     }
+    }   // end: 섬 위 무대
 
     const resize = () => { const w = el.clientWidth, h = el.clientHeight || 1; renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
     resize(); const ro = new ResizeObserver(resize); ro.observe(el);
 
-    // 노래: 녹음이 있으면 그 목소리를, 없으면 기본 노래를. 끝나면 잠깐 뒤 편지로 넘어간다.
-    const player = createPlayer(voiceUrl, () => { setEnded(true); if (!preview) setTimeout(() => doneRef.current?.(), 1300); });
+    // 해무가 날아오는 길: 멀리 위쪽에서 시작해 무대 옆(원래 서 있는 자리)에 내려앉는다. 편지를 안고 온다.
+    let hmEnd = null, hmPath = null, parcel = null;
+    if (intro && hm) {
+      hmEnd = hm.position.clone();
+      hmPath = new THREE.CatmullRomCurve3([new THREE.Vector3(-13, 9, -16), new THREE.Vector3(-6, 6.5, -4), new THREE.Vector3(hmEnd.x - 2.2, hmEnd.y + 1.6, hmEnd.z - 1.5), hmEnd]);
+      parcel = makeEnvelope(); parcel.scale.setScalar(1.6); parcel.position.set(0.55, -0.15, 0.45); parcel.rotation.z = 0.3; hm.add(parcel);
+    }
+    // 노래: 녹음이 있으면 그 목소리를, 없으면 기본 노래를. 끝나면 잠깐 뒤 편지로 넘어간다. 도착 영상에서는 해무가 내려앉은 뒤에 시작한다.
+    let player = { level: () => 0, stop() {} };
+    const startSong = () => { player = createPlayer(voiceUrl, () => { setEnded(true); if (!preview) setTimeout(() => doneRef.current?.(), 1300); }); };
+    let songTimer = null, landTimer = null;
+    if (intro) { songTimer = setTimeout(startSong, ARRIVE * 1000); landTimer = setTimeout(() => setLanded(true), ARRIVE * 1000); } else startSong();
     const hist = []; let raf; const clock = new THREE.Clock();
     const frame = () => {
       const dt = Math.min(0.05, clock.getDelta()), t = clock.elapsedTime;
       const amp = player.level(); hist.unshift(amp); if (hist.length > 24) hist.pop();
+      stageApi?.update(t, dt, amp, mood);
+      if (hm && hmPath) {                                          // 해무: 날아와 내려앉기(노래가 시작되면 입을 움직인다)
+        const u = sm01(t / ARRIVE);
+        if (u < 1) {
+          const p = hmPath.getPoint(u), tg = hmPath.getTangent(Math.min(u, 0.98)), face = -Math.PI / 2 - 0.15, flying = Math.atan2(-tg.z, tg.x);
+          hm.position.copy(p); hm.rotation.set(0, flying + (face - flying) * sm01((u - 0.8) / 0.2), 0);
+          animatePostman(hm, t, 0.95);
+        } else {
+          if (parcel) parcel.visible = false;                      // 편지는 해무 품으로
+          if (!stageApi) { animatePostman(hm, t, 0.35 + amp * 0.5); hm.position.y = hmEnd.y + Math.sin(t * mood.speed * 2 + 1) * 0.08; }
+          hmMouth.scale.set(0.45, 0.25 + Math.min(1, amp * 1.3) * 1.5, 1);
+        }
+      }
       vill.forEach(({ v, ph }, i) => {
         animateVillager(v, t, ph, mood, amp);
         const a = hist[Math.min(hist.length - 1, i * 2)] ?? 0;                         // 친구마다 살짝 늦게: 입 모양이 한꺼번에 똑같지 않게
         v.userData.mouth.scale.set(1 - a * 0.25, 0.25 + Math.min(1, a * 1.3) * 1.5, 0.5);
       });
-      animatePostman(pm, t, 0.35 + amp * 0.5);
-      pm.position.y = 0.95 + Math.sin(t * mood.speed * 2) * 0.08 + amp * 0.06; pm.rotation.z = Math.sin(t * mood.speed) * 0.05;
-      pmMouth.scale.set(0.45, 0.25 + Math.min(1, amp * 1.3) * 1.5, 1);
+      if (pm) {
+        animatePostman(pm, t, 0.35 + amp * 0.5);
+        pm.position.y = 0.95 + Math.sin(t * mood.speed * 2) * 0.08 + amp * 0.06; pm.rotation.z = Math.sin(t * mood.speed) * 0.05;
+        pmMouth.scale.set(0.45, 0.25 + Math.min(1, amp * 1.3) * 1.5, 1);
+      }
       anim.forEach((f) => f(t, dt));
-      wtex.offset.set(t * 0.02, t * 0.012);
+      wtex?.offset.set(t * 0.02, t * 0.012);
       cam.position.set(Math.sin(t * 0.18) * 1.2, 2.7 + Math.sin(t * 0.13) * 0.15, 8.8); cam.lookAt(0, 1.3, 1.4);
       renderer.render(scene, cam);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => {
-      cancelAnimationFrame(raf); ro.disconnect(); player.stop();
-      scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose?.(); }); wtex.dispose();
+      cancelAnimationFrame(raf); ro.disconnect(); player.stop(); clearTimeout(songTimer); clearTimeout(landTimer);
+      scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose?.(); }); wtex?.dispose();
       renderer.dispose(); renderer.domElement.remove();
     };
   }, [round]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -325,7 +340,7 @@ export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, fro
       <button className="pill intro-skip" onClick={preview ? onClose : () => doneRef.current?.()} aria-label={preview ? "닫기" : "건너뛰기"}>
         {preview ? <Icon name="close" size={16} /> : "건너뛰기"}
       </button>
-      <p className="intro-cap tag fade party-cap">{voiceUrl ? `${from || "누군가"}${/[가-힣]$/.test(from || "") && ((from.charCodeAt(from.length - 1) - 0xac00) % 28 !== 0) ? "이" : ""} 부른 노래` : "마을 친구들과 우체부가 부르는 노래"}</p>
+      <p className="intro-cap tag fade party-cap" key={landed ? "song" : "arrive"}>{!landed ? `해무가 ${from || "누군가"}의 편지를 배달하러 왔어요` : voiceUrl ? `${josa(from || "누군가", "이", "가")} 부른 노래` : ({ sea: "잠수한 해무와 바다 친구들이 부르는 노래", sky: "구름 위 친구들이 부르는 노래" }[P.stage] || "마을 친구들과 우체부가 부르는 노래")}</p>
       {preview && ended && <button className="btn intro-start fade" onClick={() => { setEnded(false); setRound((r) => r + 1); }}><Icon name="play" size={18} /> 다시 보기</button>}
     </div>
   );

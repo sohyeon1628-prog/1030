@@ -3,6 +3,7 @@ import { GRADE_NAME } from "../data/letters.js";
 import { PAPERS } from "../data/story.js";
 import { getStatus, deleteLetter, letterUrl } from "../api.js";
 import Icon from "./Icon.jsx";
+import { copyText } from "../clipboard.js";
 import PartyScene from "./PartyScene.jsx";
 import { loadVoice } from "../party/audio.js";
 
@@ -14,7 +15,33 @@ function remain(ms) {
   return `${Math.ceil(s / 86400)}일`;
 }
 const fmt = (t) => new Date(t).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+const REACTION = { clap: ["👏", "박수"], fireworks: ["🎆", "폭죽"], heart: ["💗", "하트"] };   // 받는 사람이 돌려보낸 반응
 const isGone = (e) => e.status === 404 || e.status === 410;
+
+// 기억 구슬: 숫자만 있으면 무엇에 쓰는지 알 수 없어서, 역할과 다음 보상까지의 진행을 함께 보여 준다.
+// 구슬은 쓰고 사라지지 않는다. 모은 수가 기준을 넘으면 편지지가 열린다(WriteScreen). 이야기 편지는 한 번에 3개·7개 이상 모으면 도착 장면에 기억이 한 줄씩 더 떠오른다.
+function OrbCard({ total }) {
+  const tiers = PAPERS.filter((p) => p.need > 0);
+  const next = tiers.find((p) => p.need > total);
+  const prevNeed = [...tiers].reverse().find((p) => p.need <= total)?.need || 0;
+  const pct = next ? Math.round(((total - prevNeed) / (next.need - prevNeed)) * 100) : 100;
+  return (
+    <section className="orb-card" aria-label="기억 구슬">
+      <div className="orb-head"><span className="orb-dot" aria-hidden="true" /><b>{total}</b><span>기억 구슬</span></div>
+      <p>비행 중 반짝이는 구슬을 지나가며 모으는 수집품이에요. 쓰고 사라지지 않고, 모을수록 보상이 열려요. 같은 편지를 다시 날면 가장 많이 모은 개수만 쌓여요.</p>
+      <div className="orb-bar" role="progressbar" aria-valuenow={total} aria-valuemin={0} aria-valuemax={tiers[tiers.length - 1].need}><i style={{ width: `${pct}%` }} /></div>
+      <small>{next ? `다음 보상 '${next.label} 편지지'까지 ${next.need - total}개` : "모든 편지지를 열었어요"}</small>
+      <ul className="orb-rewards">
+        {tiers.map((p) => (
+          <li key={p.id} className={total >= p.need ? "on" : ""}>
+            <i className="sw" style={{ background: p.color }} />{p.label} 편지지<em>구슬 {p.need}개 · {total >= p.need ? "열림" : "잠김"}</em>
+          </li>
+        ))}
+        <li><i className="sw memo" />이야기 편지 도착 장면의 기억<em>한 번에 3개 이상: 한 줄 · 7개 이상: 두 줄</em></li>
+      </ul>
+    </section>
+  );
+}
 
 // 편지함: 날아가는 중인 편지, 도착한 편지, 링크로 보낸 편지(읽음 확인·복사·회수), 모은 우표와 구슬
 export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = null, onBack, onRetry, onPatch, onDeleteVoice }) {
@@ -32,7 +59,7 @@ export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = n
     let alive = true;
     mine.filter((m) => m.share && !m.share.revoked).forEach((m) => {
       getStatus(m.share.id, m.share.secret)
-        .then((r) => alive && setSt((s) => ({ ...s, [m.id]: { opened: r.opened } })))
+        .then((r) => alive && setSt((s) => ({ ...s, [m.id]: { opened: r.opened, reaction: r.reaction } })))
         .catch((e) => { if (alive && isGone(e)) setSt((s) => ({ ...s, [m.id]: { gone: true } })); });
     });
     return () => { alive = false; };
@@ -40,7 +67,7 @@ export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = n
 
   const copy = async (m) => {
     const url = letterUrl(m.share.id);
-    try { await navigator.clipboard.writeText(url); } catch { window.prompt("링크를 복사하세요", url); }
+    if (!(await copyText(url))) window.prompt("링크를 복사하세요", url);
     setCopied(m.id); setTimeout(() => setCopied(null), 1600);
   };
   const revoke = async (m) => {
@@ -88,12 +115,12 @@ export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = n
       <div className="form">
         <h2>편지함</h2>
         <div className="stamps">
-          <div className="stamp orb"><b>{orbsTotal}</b><span>기억 구슬</span></div>
           {Object.keys(stamps).map((g) => (
             <div key={g} className={`stamp ${g}`}><b>{stamps[g]}</b><span>{GRADE_NAME[g]} 우표</span></div>
           ))}
         </div>
-        {mine.length === 0 && <p className="sub">아직 부친 편지가 없습니다. 지도에서 "편지 쓰기"를 눌러 보세요.</p>}
+        <OrbCard total={orbsTotal} />
+        {mine.length === 0 && <p className="sub">아직 부친 편지가 없습니다. 지도의 편지섬에서 편지를 써 보세요.</p>}
         {mine.map((m) => {
           const link = m.mode === "link";
           const ready = link || now >= m.openAt;
@@ -111,6 +138,7 @@ export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = n
                   {m.share && !dead ? (
                     <>
                       <button className="icon-act" onClick={() => copy(m)} aria-label="링크 복사" title="링크 복사"><Icon name={copied === m.id ? "check" : "copy"} size={18} /></button>
+                      {st[m.id]?.reaction && <span className="reaction-got" role="img" aria-label={`받는 사람이 ${REACTION[st[m.id].reaction]?.[1]}을 보냈어요`} title={`받는 사람이 ${REACTION[st[m.id].reaction]?.[1]}을 보냈어요`}>{REACTION[st[m.id].reaction]?.[0]}</span>}
                       <span className={`seen ${st[m.id]?.opened ? "on" : ""}`} role="img" aria-label={st[m.id]?.opened ? "받는 사람이 읽었어요" : "아직 읽지 않았어요"} title={st[m.id]?.opened ? "읽었어요" : "아직 안 읽었어요"}><Icon name="eye" size={18} /></span>
                       <button className="icon-act danger" onClick={() => revoke(m)} aria-label="편지 거두기" title="거두기"><Icon name="trash" size={18} /></button>
                     </>

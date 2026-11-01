@@ -91,8 +91,10 @@ export function stepFlight(F, dt, fx) {
 
   if (F.mode === "count") {
     F.cd -= dt;
+    const tk = Math.ceil(F.cd);
+    if (F.cd > 0 && tk !== F.lastTick) { F.lastTick = tk; fx.tick?.(); }
     if (F.lift >= 1) F.y += (LANE_Y[F.lane] - F.y) * (1 - Math.exp(-dt / LANE_TAU));   // 섬 위에 서 있는 동안은 땅에 붙어 있다
-    if (F.cd <= 0) { F.mode = "fly"; F.takeX = F.x; }
+    if (F.cd <= 0) { F.mode = "fly"; F.takeX = F.x; if (F.lift < 1) fx.takeoff?.(); }
     return;
   }
   if (F.mode === "done") {
@@ -146,14 +148,14 @@ export function stepFlight(F, dt, fx) {
   // 착륙: 섬에 가까워지면 자동으로 부드럽게 내려앉는다
   if (F.x >= 0.95 * LEN) {
     F.y = LAND_Y; F.vy = 0; F.mode = "done"; F.doneT = 1.2; F.landV = vx * 0.6;
-    fx.chime?.(660);
+    fx.land?.();
     return;
   }
 
   // 충돌: 깃털 방패가 있으면 한 번 막아 주고, 아니면 하트가 하나 줄어든다
   const hit = () => {
     if (F.inv > 0) return false;
-    if (F.guard > 0) { F.guard--; F.inv = 1.0; F.pop = { kind: "guard", t: 0.5 }; fx.chime?.(520); if (F.practice) say(F, "방패가 막아 줬어요! 하트는 그대로예요", 2.2); return false; }
+    if (F.guard > 0) { F.guard--; F.inv = 1.0; F.pop = { kind: "guard", t: 0.5 }; fx.shield?.(); if (F.practice) say(F, "방패가 막아 줬어요! 하트는 그대로예요", 2.2); return false; }
     F.hits++; F.totalHits++; F.inv = INV; F.shake = 0.3; F.x = Math.max(0, F.x - 40); F.combo = 0;
     fx.thud?.();
     if (F.practice) { F.hitMark = 1.1; F.hits = Math.min(F.hits, 3); }
@@ -164,8 +166,9 @@ export function stepFlight(F, dt, fx) {
   // 사고를 무사히 지나치면 콤보가 오른다. COMBO_SHIELD번 연속이면 깃털 방패를 하나 준다.
   const dodged = () => {
     F.combo++; F.bestCombo = Math.max(F.bestCombo, F.combo); F.comboT = 1.2;
+    if (F.combo >= 2) fx.combo?.(F.combo);
     if (F.combo % COMBO_SHIELD === 0 && !F.practice) {
-      F.guard = Math.min(2, F.guard + 1); F.pop = { kind: "guard", t: 0.5 }; fx.chime?.(880);
+      F.guard = Math.min(2, F.guard + 1); F.pop = { kind: "guard", t: 0.5 }; fx.shield?.();
       say(F, `${F.combo}연속 회피! 깃털 방패를 얻었어요`, 1.8);
     }
   };
@@ -180,7 +183,7 @@ export function stepFlight(F, dt, fx) {
     if (ev.state === "idle") {
       const lead = breach ? vx * (ev.warn + 0.85) : vx * ev.warn + (vx * span) / (vx + ve);
       if (d <= lead && d > -60) {
-        ev.state = "tele"; ev.t = ev.warn;
+        ev.state = "tele"; ev.t = ev.warn; fx.warn?.();
         if (!breach) ev.y = LANE_Y[ev.lane];                                   // 새·비행기는 경고된 줄로 온다(검은 새 떼는 도중에 꺾는다)
         if (F.hintsOn && !F.hinted.ev) { F.hinted.ev = true; say(F, breach ? "바다가 일렁여요! 다른 줄로 피하세요" : "빨간 띠가 뜬 줄을 피하세요!", 3.2); }
       }
@@ -188,8 +191,8 @@ export function stepFlight(F, dt, fx) {
       ev.t -= dt;
       if (ev.t <= 0) {
         ev.state = "act";
-        if (breach) ev.t = 0;
-        else { ev.px = F.x + span; ev.ly = ev.cy = ev.y; }
+        if (breach) { ev.t = 0; fx.splash?.(); }
+        else { fx.whoosh?.(); ev.px = F.x + span; ev.ly = ev.cy = ev.y; }
       }
     } else if (ev.state === "act") {
       if (breach) {
@@ -200,7 +203,7 @@ export function stepFlight(F, dt, fx) {
         ev.bx = ev.x + JUMP_SPAN * (1 - 2 * u);
         ev.by = top * 4 * u * (1 - u) - 30;                                     // 물속 30px에서 나와 물속으로 들어간다
         ev.vx = -2 * JUMP_SPAN; ev.vy = top * 4 * (1 - 2 * u);
-        if (u >= 1) ev.state = "done";
+        if (u >= 1) { ev.state = "done"; fx.splash?.(); }
         else {
           const [L, T] = ev.kind === "whale" ? [124, 44] : [100, 34];
           const n = Math.hypot(ev.vx, ev.vy), ax = ev.vx / n, ay = ev.vy / n;
