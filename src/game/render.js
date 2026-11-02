@@ -414,7 +414,7 @@ function skyRoad(ctx, F, camX, sy, W) {
   if (F.mode === "fly") for (const o of w.obs) {
     const ahead = o.x - F.x;
     if (ahead < 40 || ahead > 340 || o.passed) continue;
-    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "pirate" ? ahead < 210 : ahead < 210;       // 이때부터 누르면 된다
+    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "pirate" ? ahead < 250 : ahead < 210;       // 이때부터 누르면 된다
     ctx.save(); ctx.globalAlpha = hot ? 0.95 : 0.55; ctx.textAlign = "center";
     const y = sy(WALK_TOP + (o.kind === "pirate" ? o.h + 30 : 8)) - 46 + bob;
     path(ctx, () => { ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 14); ctx.closePath(); }); ctx.fillStyle = hot ? "#e8553a" : "#ffffff"; ctx.fill();

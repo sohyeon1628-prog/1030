@@ -1,6 +1,7 @@
 import { LEN, LAND_Y, R, SX, VX_PRACTICE, LANE_Y, LANE_TAU, MAX_HITS, INV, COMBO_SHIELD, JUMP_T, JUMP_SPAN, GROUND_Y, TAKEOFF, WALK_Y, WALK_JUMP, WALK_JUMP_T, LAND_P, CALM_DIST, GUARD_T, UMBRELLA_T } from "./constants.js";
 import { buildLevel, buildPracticeLevel, guide, clamp, speedAt } from "./level.js";
 
+const PIRATE_V = 90, PIRATE_SEE = 520;   // 해적이 뛰어오는 속도(px/초)와, 우체부가 이만큼 가까워지면 뛰기 시작하는 거리
 export function createFlight(letter, tutorialSeen, practice = false) {
   return {
     letter,
@@ -221,6 +222,7 @@ export function stepFlight(F, dt, fx) {
   if (inZone && F.walkK > 0.5) {
     if (!F.hinted.walk) { F.hinted.walk = true; say(F, "‘점프!’가 빨개지면 화면을 눌러요 (해적이 뛰어와요)", 3.8); }
     for (const o of wk.obs) {
+      if (o.kind === "pirate" && !o.passed && o.x - F.x < PIRATE_SEE && F.x < o.x + o.w) o.x -= PIRATE_V * dt;     // 해적이 가까워지면 이쪽으로 뛰어온다
       const dx = Math.abs(F.x - o.x), dy = F.y - WALK_Y;
       const bad = o.kind === "pirate" ? dx < o.w / 2 && dy < o.h - 10 : dx < o.w / 2 - 14 && dy < 14;
       if (bad && hit()) return;
