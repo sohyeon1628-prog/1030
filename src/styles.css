@@ -772,3 +772,7 @@ textarea, input { font-size: max(16px, 1em); }
 @media (pointer: coarse) { .app > .screen { animation: none; } .wt-paper::after { pointer-events: none; } .paper.paper-gold::before { pointer-events: none; } }
 .nb-skip { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 16px 0 4px; text-align: center; }
 .nb-skip small { color: var(--dim); font: 13px var(--sans); }
+/* 비행 화면 오른쪽의 위·아래 버튼(화면 누르기가 불편할 때 보조) */
+.udbtns { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); z-index: 6; display: flex; flex-direction: column; gap: 14px; }
+.udbtns button { width: 64px; height: 64px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(255,255,255,.72); color: #1f4a63; box-shadow: 0 4px 0 rgba(31,74,99,.28); touch-action: manipulation; cursor: pointer; }
+.udbtns button:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(31,74,99,.28); background: #fff; }

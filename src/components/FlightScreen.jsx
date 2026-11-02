@@ -103,6 +103,12 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
       {zones && !paused && (
         <div className="zones" aria-hidden="true"><span className="zone up"><Icon name="up" size={30} />{touch ? "여기를 누르면 위로" : "위쪽을 누르면 위로"}</span><span className="zone down"><Icon name="down" size={30} />{touch ? "여기를 누르면 아래로" : "아래쪽을 누르면 아래로"}</span></div>
       )}
+      {!paused && (
+        <div className="udbtns">
+          <button onPointerDown={(e) => { stop(e); audioStart(); if (!pausedRef.current) move(1); }} onPointerUp={stop} aria-label="위로"><Icon name="up" size={30} /></button>
+          <button onPointerDown={(e) => { stop(e); audioStart(); if (!pausedRef.current) move(-1); }} onPointerUp={stop} aria-label="아래로"><Icon name="down" size={30} /></button>
+        </div>
+      )}
       <button className="pause-btn" onPointerDown={stop} onPointerUp={stop} onClick={() => setPause(true)} aria-label="일시정지">Ⅱ</button>
       {paused && (
         <div className="overlay" onPointerDown={stop} onPointerUp={stop}>
