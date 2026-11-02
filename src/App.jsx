@@ -126,31 +126,32 @@ export default function App() {
   };
   const patchMine = (id, patch) => update((s) => ({ ...s, mine: s.mine.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
 
-  const finish = ({ grade: g, orbs = 0 }) => {
+  // 편지 배달을 마쳤을 때: 이야기 편지는 배달 기록과 구슬을, 내 편지는 편지함과 서버 올리기를 처리한다. lt: 방금 만든 편지(게임 없이 바로 보낼 때는 아직 letter 상태에 없다)
+  const finish = ({ grade: g, orbs = 0 }, lt = letter) => {
     setOrbsGot(orbs);
-    if (letter.custom) {
+    if (lt.custom) {
       const now = Date.now();
       const entry = {
-        id: letter.id, to: letter.to, body: letter.body.join("\n"), paper: letter.paper, gap: letter.gap,
-        createdAt: now, openAt: letter.mode === "link" ? now : now + letter.delay, grade: g, reply: letter.reply,
-        mode: letter.mode || "future", fromName: letter.fromName, expireDays: letter.expireDays,
+        id: lt.id, to: lt.to, body: lt.body.join("\n"), paper: lt.paper, gap: lt.gap,
+        createdAt: now, openAt: lt.mode === "link" ? now : now + lt.delay, grade: g, reply: lt.reply,
+        mode: lt.mode || "future", fromName: lt.fromName, expireDays: lt.expireDays,
       };
-      if (letter.mode === "link") {                                // 도착 장면과 녹음(올리기 전까지 기기에 둔다. 여러 명이면 한 사본을 함께 쓴다)
-        entry.scene = letter.scene || "island"; entry.voiceKey = entry.id;
-        if (letter.voice && saveVoice(entry.id, letter.voice.url)) entry.hasVoice = true;
+      if (lt.mode === "link") {                                // 도착 장면과 녹음(올리기 전까지 기기에 둔다. 여러 명이면 한 사본을 함께 쓴다)
+        entry.scene = lt.scene || "island"; entry.voiceKey = entry.id;
+        if (lt.voice && saveVoice(entry.id, lt.voice.url)) entry.hasVoice = true;
       }
-      if (letter.mode === "party") {
-        entry.openAt = now + letter.delay; entry.party = letter.party; entry.hasVoice = !!letter.voice;
-        if (letter.voice && !saveVoice(entry.id, letter.voice.url)) entry.hasVoice = false;   // 저장 공간이 모자라면 기본 노래로
+      if (lt.mode === "party") {
+        entry.openAt = now + lt.delay; entry.party = lt.party; entry.hasVoice = !!lt.voice;
+        if (lt.voice && !saveVoice(entry.id, lt.voice.url)) entry.hasVoice = false;   // 저장 공간이 모자라면 기본 노래로
       }
       // 링크로 여러 사람에게: 받는 사람마다 편지함 항목을 따로 만든다(읽음 확인·회수를 사람별로). {이름}은 그 사람 이름으로 바꾼다.
-      const tos = letter.mode === "link" && letter.tos?.length > 1 ? letter.tos : null;
+      const tos = lt.mode === "link" && lt.tos?.length > 1 ? lt.tos : null;
       const entries = tos ? tos.map((to, i) => ({ ...entry, id: `${entry.id}-${i}`, to, body: entry.body.split(NAME_TOKEN).join(to) })) : [{ ...entry, body: entry.body.split(NAME_TOKEN).join(entry.to) }];
       update((s) => ({ ...entries.reduceRight(addMine, s), orbExtra: (s.orbExtra || 0) + orbs }));
-      if (letter.mode === "link") { setShare({ status: "sending" }); upload(entries).then(setShare); }
+      if (lt.mode === "link") { setShare({ status: "sending" }); upload(entries).then(setShare); }
     } else {
-      setEpilogue(letter.id === "l4" && !state.delivered.l4);
-      update((s) => ({ ...recordDelivery(s, letter.id, g), orbs: { ...s.orbs, [letter.id]: Math.max(s.orbs?.[letter.id] || 0, orbs) } }));
+      setEpilogue(lt.id === "l4" && !state.delivered.l4);
+      update((s) => ({ ...recordDelivery(s, lt.id, g), orbs: { ...s.orbs, [lt.id]: Math.max(s.orbs?.[lt.id] || 0, orbs) } }));
     }
     setGrade(g);
     setScreen("arrive");
@@ -159,12 +160,13 @@ export default function App() {
   const submitMine = ({ mode, fromName, expireDays, to, tos, gap, paper, delay, body, party, voice, scene }) => {
     const id = `m${Date.now()}`;
     if (mode === "party" && "Notification" in window && Notification.permission === "default") Notification.requestPermission();   // 도착 알림
-    setLetter({
+    const lt = {
       id, custom: true, mode, party, voice, scene, fromName, expireDays, from: "나", to, tos, title: `${to}에게`, gap, paper, delay,
       body: body.split("\n"), reply: pickReply(gap, id),
       flight: { ...FLIGHT_BY_GAP[gap], ...FLIGHT_COMMON },
-    });
-    fly();
+    };
+    setLetter(lt);
+    finish({ grade: "perfect", orbs: 0 }, lt);                       // 내 편지는 비행 게임 없이 바로 보낸다(이야기 편지 네 통만 게임으로 전한다)
   };
 
   // 파티 편지 도착 확인: 열려 있는 동안 5초마다 본다(앱 푸시는 아직 없고 브라우저 알림만)
@@ -313,11 +315,11 @@ export default function App() {
               : letter.reply}</p>
             {!letter.custom && orbsGot >= 3 && letter.memory && <p className="memory">{letter.memory[0]}{orbsGot >= 7 && <> {letter.memory[1]}</>}</p>}
           </article>
-          <div className={`grade ${grade}`}>{GRADE_NAME[grade]}</div>
-          <div className="orbs-row" role="img" aria-label={`기억 구슬 ${orbsGot} / 9`}>{Array.from({ length: 9 }, (_, k) => <span key={k} className={k < orbsGot ? "on" : ""} />)}</div>
+          {!letter.custom && <div className={`grade ${grade}`}>{GRADE_NAME[grade]}</div>}
+          {!letter.custom && <div className="orbs-row" role="img" aria-label={`기억 구슬 ${orbsGot} / 9`}>{Array.from({ length: 9 }, (_, k) => <span key={k} className={k < orbsGot ? "on" : ""} />)}</div>}
           {letter.custom && letter.mode === "link" && <ShareBox share={share} onRetry={() => { const e = share?.entries; if (!e) return; setShare({ status: "sending" }); upload(e).then(setShare); }} />}
           <p className="sub">
-            {letter.custom ? "우표가 한 장 모였습니다." : "바람길이 이어졌습니다. 부표가 사라지고 금빛 바람이 흐릅니다."}
+            {letter.custom ? "" : "바람길이 이어졌습니다. 부표가 사라지고 금빛 바람이 흐릅니다."}
           </p>
           {!letter.custom && next && <p className="sub next">다음 이야기가 열렸어요 — {next.chapter}장 「{next.title}」 ({next.people})</p>}
           <div className="row">
