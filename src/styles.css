@@ -756,3 +756,14 @@ button.auth-google { cursor: pointer; width: 100%; }
 
 .brace-btn { left: 18px; bottom: 36px; width: 104px; height: 104px; font-size: 20px; }
 @media (orientation: landscape) and (max-height: 520px) { .brace-btn { width: 88px; height: 88px; bottom: 20px; } }
+
+/* 글 쓰는 칸: 아이폰(사파리·카카오톡 앱 안 브라우저)은 -webkit-user-select가 none인 곳에서는 글쓰기 칸을 눌러도 키보드가 올라오지 않는다.
+   화면 전체에 user-select: none을 걸어 두었으므로 입력 칸은 접두사까지 붙여 반드시 text로 되돌린다. */
+input, textarea, [contenteditable="true"] { -webkit-user-select: text !important; user-select: text !important; -webkit-touch-callout: default; touch-action: manipulation; }
+textarea, input { font-size: max(16px, 1em); }
+/* 휴대폰·태블릿(손가락)에서는 3D로 기울어지는 효과를 끈다: 3D 변환이 걸린 곳은 아이폰에서 눌러도 엉뚱한 곳이 눌리거나 키보드가 안 올라올 수 있다 */
+@media (pointer: coarse) {
+  .wt-stage { perspective: none; }
+  .wt-tilt, .wt-paper, .wt-title, .wt-papers, .wt-send-btns { transform: none !important; transform-style: flat; }
+  .wt-tilt { animation: none; transition: none; }
+}

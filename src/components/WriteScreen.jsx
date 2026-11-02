@@ -27,6 +27,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
   const [consent, setConsent] = useState(false);          // 녹음을 서버에 올려 링크를 가진 사람이 듣는 것에 동의했는가
   const [micErr, setMicErr] = useState("");
   const stage = useRef(null);
+  const bodyBox = useRef(null);
   const ctl = useRef(null);
   useEffect(() => () => ctl.current?.cancel(), []);
 
@@ -76,14 +77,14 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
         <span className="wt-back ghost" aria-hidden="true" />
       </div>
 
-      <div className="wt-stage" ref={stage} onPointerMove={tilt}>
+      <div className="wt-stage" ref={stage} onPointerMove={(e) => { if (e.pointerType === "mouse") tilt(e); }}>
         <div className="wt-tilt">
-          <article className={`paper wt-paper paper-${paper}`} style={{ backgroundColor: color }}>
+          <article className={`paper wt-paper paper-${paper}`} style={{ backgroundColor: color }} onClick={(e) => { if (!e.target.closest("input, textarea, a, button")) bodyBox.current?.focus(); }}>   {/* 편지지의 빈 곳을 눌러도 글쓰기 칸이 열린다 */}
             <label className="wt-dear">
               <input value={to} maxLength={60} autoFocus placeholder="누구에게" aria-label="받는 사람 (여러 명은 쉼표로)" onChange={(e) => setTo(e.target.value)} />
               <span>에게</span>
             </label>
-            <textarea value={body} maxLength={MAX} placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." aria-label="편지 내용" onChange={(e) => setBody(e.target.value)} />
+            <textarea ref={bodyBox} enterKeyHint="enter" value={body} maxLength={MAX} placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." aria-label="편지 내용" onChange={(e) => setBody(e.target.value)} />
             <div className="wt-foot"><span>{names.length > 1 ? `${names.length}명에게 · ` : ""}{body.length} / {MAX}</span></div>
           </article>
 
