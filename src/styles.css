@@ -728,3 +728,13 @@ button.auth-google { cursor: pointer; width: 100%; }
    내용이 화면보다 길면 가운데 맞춤 때문에 위로도 넘쳐서 스크롤할 수 없었다. 이제 내용이 길면 위에서부터 놓이고 스크롤된다. */
 .wt-stage { min-height: min-content; align-items: flex-start; }
 .wt-tilt { margin-block: auto; }
+
+/* 도착 장면·녹음 순서: 1 장소 → 2 동의 체크 후 녹음 → 3 미리 보기 */
+.wt-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; width: 100%; }
+.wt-step { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid rgba(120, 90, 50, .18); }
+.wt-step:first-child { border-top: 0; padding-top: 0; }
+.wt-step h4 { margin: 0; display: flex; align-items: center; gap: 8px; font: 700 14px "Pretendard", "Noto Sans KR", sans-serif; color: #3b2a1c; }
+.wt-step h4 i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #d9452c; color: #fff; font: 800 12px "Pretendard", sans-serif; font-style: normal; flex: none; }
+.wt-step h4 small { font-weight: 500; font-size: 11.5px; color: #80868b; }
+.wt-stephint { margin: -2px 0 0; font-size: 12.5px; color: #6b5a44; }
+.wt-step .wt-consent { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(120,90,50,.18); }

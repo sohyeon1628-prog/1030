@@ -108,32 +108,44 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
           {/* 도착 장면과 내 목소리: 받는 사람이 링크를 열면 이 장면에서 해무가 편지를 배달한다 */}
           <section className="wt-arrival" aria-label="도착 연출">
             <h3>받는 사람에게 이렇게 도착해요</h3>
-            <div className="wt-scenes" role="radiogroup" aria-label="도착 장면">
-              {CONCEPTS.map((c) => (
-                <button key={c.id} role="radio" aria-checked={scene === c.id} className={`wt-scene ${scene === c.id ? "on" : ""}`} style={{ "--tone": c.tone }} onClick={() => setScene(c.id)}>
-                  <span className="ico"><Icon name="party" size={20} /></span>
-                  <b>{c.label.replace(" 파티", "")}</b><small>{c.hint}</small>
-                </button>
-              ))}
-            </div>
-            <div className="wt-voice">
-              {!rec ? (
-                <button className="btn ghost" disabled={!consent} title={consent ? "" : "아래 동의에 체크하면 녹음할 수 있어요"} onClick={record}><Icon name="mic" size={18} />{voice ? "다시 녹음하기" : "내 목소리 녹음하기"}</button>
-              ) : (
-                <button className="btn rec" onClick={() => ctl.current?.stop()}><Icon name="stop" size={18} />{rec.sec.toFixed(0)}초 · 멈추기</button>
-              )}
-              {voice && !rec && (
-                <>
-                  <span className="tag ready">{voice.seconds.toFixed(0)}초 녹음됨</span>
-                  <button className="icon-act danger" onClick={() => setVoice(null)} aria-label="녹음 지우기" title="녹음 지우기"><Icon name="trash" size={18} /></button>
-                </>
-              )}
-              <button className="btn ghost" onClick={() => setPreview(true)}><Icon name="play" size={18} />미리 보기</button>
-            </div>
-            <label className="wt-consent">
-              <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); if (!e.target.checked) setVoice(null); }} />
-              <span>내 목소리를 서버에 올려, <b>편지 링크를 가진 사람이 들을 수 있다</b>는 점에 동의해요. 편지 보관 기간이 끝나거나 편지를 거두면 지워져요. <a href="/privacy#voice" target="_blank" rel="noopener">자세히 보기</a></span>
-            </label>
+            <ol className="wt-steps">
+              <li className="wt-step">
+                <h4><i>1</i>도착할 장소를 골라요</h4>
+              <div className="wt-scenes" role="radiogroup" aria-label="도착 장면">
+                {CONCEPTS.map((c) => (
+                  <button key={c.id} role="radio" aria-checked={scene === c.id} className={`wt-scene ${scene === c.id ? "on" : ""}`} style={{ "--tone": c.tone }} onClick={() => setScene(c.id)}>
+                    <span className="ico"><Icon name="party" size={20} /></span>
+                    <b>{c.label.replace(" 파티", "")}</b><small>{c.hint}</small>
+                  </button>
+                ))}
+              </div>
+              </li>
+              <li className="wt-step">
+                <h4><i>2</i>내 목소리를 남겨요 <small>선택 · 최대 {MAX_VOICE_SEC}초</small></h4>
+                <p className="wt-stephint">먼저 동의에 체크하면 녹음 버튼이 켜져요. 녹음하지 않으면 마을의 기본 노래가 나와요.</p>
+              <label className="wt-consent">
+                <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); if (!e.target.checked) setVoice(null); }} />
+                <span>내 목소리를 서버에 올려, <b>편지 링크를 가진 사람이 들을 수 있다</b>는 점에 동의해요. 편지 보관 기간이 끝나거나 편지를 거두면 지워져요. <a href="/privacy#voice" target="_blank" rel="noopener">자세히 보기</a></span>
+              </label>
+              <div className="wt-voice">
+                {!rec ? (
+                  <button className="btn ghost" disabled={!consent} title={consent ? "" : "아래 동의에 체크하면 녹음할 수 있어요"} onClick={record}><Icon name="mic" size={18} />{voice ? "다시 녹음하기" : "내 목소리 녹음하기"}</button>
+                ) : (
+                  <button className="btn rec" onClick={() => ctl.current?.stop()}><Icon name="stop" size={18} />{rec.sec.toFixed(0)}초 · 멈추기</button>
+                )}
+                {voice && !rec && (
+                  <>
+                    <span className="tag ready">{voice.seconds.toFixed(0)}초 녹음됨</span>
+                    <button className="icon-act danger" onClick={() => setVoice(null)} aria-label="녹음 지우기" title="녹음 지우기"><Icon name="trash" size={18} /></button>
+                  </>
+                )}
+              </div>
+              </li>
+              <li className="wt-step">
+                <h4><i>3</i>미리 보고 보내요</h4>
+                <div className="wt-voice"><button className="btn ghost" onClick={() => setPreview(true)}><Icon name="play" size={18} />미리 보기</button></div>
+              </li>
+            </ol>
             <p className="wt-hint small">{micErr || `해무가 날아와 편지를 건네고, 내 목소리(선택, 최대 ${MAX_VOICE_SEC}초)에 맞춰 친구들이 노래해요. 녹음은 받는 사람에게 전해지고, 편지를 회수하거나 보관 기간(30일)이 지나면 함께 지워져요. 녹음이 없으면 기본 노래가 나와요.`}</p>
           </section>
 
