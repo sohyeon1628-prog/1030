@@ -140,7 +140,7 @@ function pirate(phase) {
       const cuff = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 4, 14), M("#6b4a2e")); cuff.position.y = -19; a.add(cuff);          // 팔 끝 가죽띠
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 9, 10), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); shaft.position.y = -25; a.add(shaft);
       const curve = new THREE.Mesh(new THREE.TorusGeometry(6.2, 1.7, 10, 22, Math.PI * 1.25), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); curve.position.set(-5, -31, 0); curve.rotation.z = -Math.PI * 0.62; a.add(curve);
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(1.8, 6, 10), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); tip.position.set(-10.2, -26, 0); tip.rotation.z = Math.PI * 0.1; a.add(tip);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(1.75, 8, 12), M("#e4ebf2", { metalness: 0.6, roughness: 0.2 })); tip.position.set(-10.9, -26.7, 0); tip.rotation.z = 1.98; a.add(tip);        // 갈고리 끝: 가늘고 뾰족하게
     } else a.add(S(4.2, "#f2c9a0", 1, 1, 1, 0, -20, 0));
     if (hook) a.scale.setScalar(1.25); a.rotation.z = hook ? 1.2 + Math.sin(phase) * 0.15 : swing; a.rotation.x = z * 0.15;
     return a;
