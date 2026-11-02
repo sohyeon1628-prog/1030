@@ -88,8 +88,6 @@ export default function App() {
   const update = useCallback((fn) => setState((prev) => { const next = fn(prev); saveState(next); return next; }), []);
   // 고정된 이야기의 편지 네 통
   const letters = useMemo(() => buildLetters(), []);
-  // 처음 날 때(아직 이야기 편지를 하나도 전하지 못했고 연습도 안 했을 때)는 연습 비행부터 시작한다
-  const firstTime = !state.practiceDone && Object.keys(state.grade).length === 0;
   // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 해무가 부르는 이름이자 내 편지의 보내는 사람 이름이다.
   const onAuth = (r) => {
     setToken(r.token); setAccount(r.user); adoptServer(r.user.nick, r.state);
@@ -105,7 +103,7 @@ export default function App() {
     update((s) => ({ ...s, nickname: n }));
     if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(home);
   };
-  const fly = () => { setPractice(firstTime); setRun((r) => r + 1); setScreen("flight"); };
+  const fly = () => { setPractice(false); setRun((r) => r + 1); setScreen("flight"); };
   const startPractice = () => { setPractice(true); setRun((r) => r + 1); setScreen("flight"); };
   const finishPractice = () => { update((s) => ({ ...s, practiceDone: true, tutorialSeen: true })); setPractice(false); setScreen("practiceEnd"); };
   const open = (l) => { setLetter(l); setScreen("read"); };
@@ -298,8 +296,8 @@ export default function App() {
             </aside>
           )}
           <div className="row">
-            <button className="btn" onClick={fly}>날아가기</button>
-            <button className="btn ghost" onClick={startPractice}>연습 비행</button>
+            <button className="btn" onClick={fly}>바로 시작하기</button>
+            <button className="btn ghost" onClick={startPractice}>연습하기</button>
             <button className="btn ghost" onClick={() => setScreen("map")}>돌아가기</button>
           </div>
         </main>
