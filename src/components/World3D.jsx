@@ -222,6 +222,28 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     };
     el.addEventListener("pointermove", move); el.addEventListener("click", click);
 
+    // 드래그로 옮기고, 두 손가락 벌리기/오므리기·마우스 휠로 확대·축소한다(지도 화면에서만)
+    el.style.touchAction = "none";
+    const ptrs = new Map(); let zoomT = 1, zoom = 1, panX = 0, panZ = 0, tx = 0, tz = 0, pinch0 = 0, z0 = 1, moved = 0, dragged = false;
+    const clampZ = (z) => Math.min(2.6, Math.max(0.75, z));
+    const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+    const down = (e) => { if (!liveRef.current) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 1) { moved = 0; dragged = false; } if (ptrs.size === 2) { pinch0 = dist(); z0 = zoomT; dragged = true; } };
+    const drag = (e) => {
+      const p = ptrs.get(e.pointerId); if (!p || !liveRef.current) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+      if (ptrs.size >= 2) { zoomT = clampZ(z0 * dist() / pinch0); return; }
+      moved += Math.abs(dx) + Math.abs(dy); if (moved < 8) return;
+      dragged = true;
+      const per = ((cam.right - cam.left) / zoomT) / (el.clientWidth || 1), k = Math.SQRT1_2;       // 화면 1px이 바닥에서 몇 칸인지
+      tx += (-dx * k - dy * k / 0.614) * per; tz += (dx * k - dy * k / 0.614) * per;                // 화면 오른쪽 = (1,0,-1), 화면 위쪽 = (-1,0,-1) 방향
+      const m = Math.hypot(tx, tz), lim = 16; if (m > lim) { tx *= lim / m; tz *= lim / m; }
+    };
+    const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size === 1) { moved = 99; } };
+    const wheel = (e) => { if (!liveRef.current) return; e.preventDefault(); zoomT = clampZ(zoomT * Math.exp(-e.deltaY * 0.0015)); };
+    const stopClick = (e) => { if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; } };
+    el.addEventListener("pointerdown", down); el.addEventListener("pointermove", drag); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", wheel, { passive: false }); el.addEventListener("click", stopClick, true);
+
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock(); let raf;
     const v = new THREE.Vector3();
@@ -310,6 +332,10 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
       });
       pops.forEach(({ obj, delay }) => { const u = (tb - delay) / 1.3; obj.scale.setScalar(Math.max(0.001, backOut(u) * (obj.userData.s || 1))); });
       bridgesAnim.forEach(({ items, delay }) => items.forEach((m, j) => { m.scale.setScalar(Math.max(0.001, backOut((tb - delay - j * 0.07) / 0.5))); }));
+      zoom += (zoomT - zoom) * 0.2; panX += (tx - panX) * 0.2; panZ += (tz - panZ) * 0.2;
+      if (Math.abs(zoomT - zoom) > 1e-4 || Math.abs(tx - panX) > 1e-3 || Math.abs(tz - panZ) > 1e-3 || cam.zoom !== zoom) {
+        cam.zoom = zoom; cam.updateProjectionMatrix(); cam.position.set(CENTER.x + 22 + panX, CENTER.y + 24, CENTER.z + 22 + panZ);
+      }
       renderer.render(scene, cam);
       // 라벨(접근 가능한 버튼)을 3D 위치에 맞춰 투영
       const w = el.clientWidth, h = el.clientHeight;
@@ -325,6 +351,8 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     return () => {
       cancelAnimationFrame(raf); ro.disconnect();
       el.removeEventListener("pointermove", move); el.removeEventListener("click", click);
+      el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", drag); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
+      el.removeEventListener("wheel", wheel); el.removeEventListener("click", stopClick, true);
       scene.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose?.(); }); wtex.dispose();
       renderer.dispose(); renderer.domElement.remove();
     };
