@@ -74,7 +74,7 @@ export default function App() {
   // 앱을 열 때 토큰이 있으면 서버에서 내 기록을 가져온다. 토큰이 만료됐으면 로그아웃 처리한다.
   useEffect(() => {
     if (!getToken()) return;
-    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); if (entry.social) { const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (r.user.needsNick && sc !== "pwreset" ? "choosenick" : sc === "nickname" ? (seen ? "map" : "intro") : sc)); } })   // 소셜로 처음 왔으면 닉네임부터 직접 정한다
+    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); if (entry.social) { const seen = !!r.state?.storySeen; setScreen((sc) => (r.user.needsNick && sc !== "pwreset" ? "choosenick" : sc === "nickname" ? (seen ? "map" : "intro") : sc)); } })   // 소셜로 처음 왔으면 닉네임부터 직접 정한다
       .catch((e) => { if (e.status === 401) { setToken(""); setAccount(null); } else setSync("offline"); });
   }, [adoptServer]);
   // 기록이 바뀌면 잠시 뒤 서버에 보관한다(로그인한 경우에만). 네트워크가 끊겨도 이 기기에는 이미 저장되어 있다.
@@ -91,7 +91,7 @@ export default function App() {
   // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 해무가 부르는 이름이자 내 편지의 보내는 사람 이름이다.
   const onAuth = (r) => {
     setToken(r.token); setAccount(r.user); adoptServer(r.user.nick, r.state);
-    if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(state.storySeen || r.state?.storySeen ? "map" : "intro");
+    if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(r.state?.storySeen ? "map" : "intro");   // 이 계정이 오프닝을 본 적이 없으면(새 계정) 이 기기에서 봤더라도 오프닝부터
   };
   const doLogout = async () => {
     if (!window.confirm("로그아웃할까요? 이 기기에 남은 기록은 지우고, 다시 로그인하면 서버의 기록을 불러와요.")) return;
@@ -229,7 +229,7 @@ export default function App() {
       {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} />}
 
       {screen === "choosenick" && account?.nick && (
-        <ChooseNick user={account} onDone={(u) => { setAccount(u); update((s) => ({ ...s, nickname: u.nick })); setScreen(loadState().storySeen ? "map" : "intro"); }} />
+        <ChooseNick user={account} onDone={(u) => { setAccount(u); update((s) => ({ ...s, nickname: u.nick })); setScreen("intro"); }} />
       )}
       {screen === "pwreset" && <ResetScreen token={entry.pwreset} onDone={() => { setToken(""); setAccount(null); setScreen("nickname"); }} />}
       {screen === "account" && account?.nick && (
