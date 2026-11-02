@@ -212,7 +212,7 @@ export function stepFlight(F, dt, fx) {
 
   // 하늘길의 장애물: 구름 덩어리는 뛰어 넘고, 구멍은 뛰어 건넌다
   if (inZone && F.walkK > 0.5) {
-    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "하늘길이에요! 구름과 구멍 앞에서 "점프!" 표시가 빨개지면 ↑(휴대폰은 화면 위쪽)을 눌러 뛰어요", 3.6); }
+    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "하늘길이에요! 구름과 구멍 앞에서 ‘점프!’ 표시가 빨개지면 ↑(휴대폰은 화면 위쪽)을 눌러 뛰어요", 3.6); }
     for (const o of wk.obs) {
       const dx = Math.abs(F.x - o.x), dy = F.y - WALK_Y;
       const bad = o.kind === "puff" ? dx < o.w / 2 + R * 0.4 && dy < o.h - 6 : dx < o.w / 2 - 14 && dy < 14;
