@@ -204,8 +204,6 @@ function PostStop({ open, onOpen }) {
       </g>
       <g transform={`translate(${lx} ${ly})`}>
         <rect x="-80" y="-17" width="160" height="42" rx="21" fill="#faf3e6" />
-        <text y="-1" textAnchor="middle" fontSize="14" fontWeight="800" fill={open ? "#d9452c" : "#6b2f1f"}>편지섬</text>
-        <text y="16" textAnchor="middle" fontSize="10.5" fill="#9a6a52">{open ? "내 편지 쓰기" : "네 통을 모두 전하면 열려요"}</text>
       </g>
     </g>
   );
