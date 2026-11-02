@@ -723,3 +723,8 @@ button.auth-google { cursor: pointer; width: 100%; }
 @keyframes sp-rise { from { opacity: 0; transform: translateY(24px) scale(.94); } }
 @keyframes sp-fade { from { opacity: 0; } }
 @keyframes sp-pop { from { opacity: 0; transform: translateY(18px) scale(.9); } }
+
+/* 편지 쓰기: 화면이 낮은 휴대폰에서 위쪽(제목·받는 사람·편지지 첫 줄)이 화면 밖으로 잘리던 문제.
+   내용이 화면보다 길면 가운데 맞춤 때문에 위로도 넘쳐서 스크롤할 수 없었다. 이제 내용이 길면 위에서부터 놓이고 스크롤된다. */
+.wt-stage { min-height: min-content; align-items: flex-start; }
+.wt-tilt { margin-block: auto; }
