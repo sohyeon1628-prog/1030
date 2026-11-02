@@ -41,40 +41,48 @@ export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, 
   };
   const enter = (e, next) => { if (e.key === "Enter") { e.preventDefault(); next ? document.getElementById(next)?.focus() : go(); } };
 
+  const TITLE = { login: "로그인", register: "계정 만들기", guest: "이 기기에서 시작", forgot: "비밀번호 찾기" };
+  const primary = busy ? "잠시만요…" : mode === "login" ? "로그인" : mode === "register" ? "만들기" : mode === "forgot" ? "메일 보내기" : onBack ? "바꾸기" : "시작";
   return (
     <main className="screen center">
-      <div className="form nick">
-        <h2>나루 우체국</h2>
-        {mode !== "forgot" && (
-          <div className="auth-tabs" role="tablist">
-            {[["login", "로그인"], ["register", "가입"], ["guest", "이 기기에서만"]].map(([k, l]) => <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? "on" : ""} onClick={() => setMode(k)}>{l}</button>)}
-          </div>
-        )}
-        <p className="sub">{HINT[mode]}</p>
+      <div className="auth-card">
+        <div className="auth-brand">나루 우체국</div>
+        <h1>{TITLE[mode]}</h1>
+        <p className="auth-sub">{HINT[mode]}</p>
+
         {mode === "forgot" ? (
           sent
-            ? <p className="sub ok" role="status">{prov.mail ? "메일을 보냈어요. 편지함에서 링크를 눌러 주세요(30분 안). 인증한 이메일이 아니면 메일이 가지 않아요." : "메일 발송이 아직 설정되지 않은 서버예요. 관리자에게 문의해 주세요."}</p>
-            : <input ref={ref} type="email" value={email} maxLength={120} placeholder="이메일" autoComplete="email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => enter(e)} />
+            ? <p className="auth-ok" role="status">{prov.mail ? "메일을 보냈어요. 편지함에서 링크를 눌러 주세요(30분 안). 인증한 이메일이 아니면 메일이 가지 않아요." : "메일 발송이 아직 설정되지 않은 서버예요. 관리자에게 문의해 주세요."}</p>
+            : <label className="auth-field"><input ref={ref} type="email" value={email} maxLength={120} placeholder=" " autoComplete="email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => enter(e)} /><span>이메일</span></label>
         ) : (
           <>
-            <input ref={ref} value={nick} maxLength={12} placeholder="닉네임 (예: 소라)" autoComplete="username" onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => enter(e, acct ? "naru-pw" : null)} />
-            {acct && <input id="naru-pw" type="password" value={pw} maxLength={64} placeholder="비밀번호 (6자 이상)" autoComplete={mode === "register" ? "new-password" : "current-password"} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => enter(e, mode === "register" ? "naru-email" : null)} />}
-            {mode === "register" && <input id="naru-email" type="email" value={email} maxLength={120} placeholder="이메일 (선택 · 비밀번호를 잊었을 때 필요해요)" autoComplete="email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => enter(e)} />}
+            <label className="auth-field"><input ref={ref} value={nick} maxLength={12} placeholder=" " autoComplete="username" onChange={(e) => setNick(e.target.value)} onKeyDown={(e) => enter(e, acct ? "naru-pw" : null)} /><span>닉네임</span></label>
+            {acct && <label className="auth-field"><input id="naru-pw" type="password" value={pw} maxLength={64} placeholder=" " autoComplete={mode === "register" ? "new-password" : "current-password"} onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => enter(e, mode === "register" ? "naru-email" : null)} /><span>비밀번호 (6자 이상)</span></label>}
+            {mode === "register" && <label className="auth-field"><input id="naru-email" type="email" value={email} maxLength={120} placeholder=" " autoComplete="email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => enter(e)} /><span>이메일 (선택)</span></label>}
+            {mode === "login" && <button className="auth-link" onClick={() => setMode("forgot")}>비밀번호를 잊으셨나요?</button>}
           </>
         )}
-        {err && <p className="sub warn" role="alert">{err}</p>}
-        <div className="row">
-          <button className="btn" disabled={!ok || busy || sent} onClick={go}>{busy ? "잠시만요…" : mode === "login" ? "로그인" : mode === "register" ? "가입하고 시작" : mode === "forgot" ? "재설정 메일 보내기" : onBack ? "바꾸기" : "시작하기"}</button>
-          {(onBack || mode === "forgot") && <button className="btn ghost" onClick={mode === "forgot" ? () => setMode("login") : onBack}>{mode === "forgot" ? "로그인으로" : "돌아가기"}</button>}
+        {err && <p className="auth-err" role="alert">{err}</p>}
+
+        <div className="auth-actions">
+          {mode === "login" && <button className="auth-link" onClick={() => setMode("register")}>계정 만들기</button>}
+          {mode === "register" && <button className="auth-link" onClick={() => setMode("login")}>이미 계정이 있어요</button>}
+          {mode === "guest" && <button className="auth-link" onClick={() => setMode("login")}>로그인하기</button>}
+          {mode === "forgot" && <button className="auth-link" onClick={() => setMode("login")}>로그인으로</button>}
+          <button className="auth-btn" disabled={!ok || busy || sent} onClick={go}>{primary}</button>
         </div>
-        {mode === "login" && <button className="linkbtn" onClick={() => setMode("forgot")}>비밀번호를 잊었어요</button>}
+
         {acct && prov.providers.length > 0 && (
-          <div className="social" aria-label="소셜 계정으로 계속하기">
-            <span>또는</span>
-            {prov.providers.map((p) => <a key={p} className={`social-btn ${p}`} href={socialUrl(p)}>{SOCIAL[p] || p}로 계속하기</a>)}
-          </div>
+          <>
+            <div className="auth-or"><span>또는</span></div>
+            {prov.providers.map((p) => <a key={p} className="auth-google" href={socialUrl(p)}><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>{SOCIAL[p] || p}로 계속하기</a>)}
+          </>
         )}
-        {onReset && <button className="linkbtn" onClick={onReset}>저장된 진행 모두 지우고 처음부터</button>}
+        <div className="auth-foot">
+          {mode !== "guest" && mode !== "forgot" && <button className="auth-link" onClick={() => setMode("guest")}>계정 없이 이 기기에서만 시작</button>}
+          {onBack && <button className="auth-link" onClick={onBack}>돌아가기</button>}
+          {onReset && <button className="auth-link faint" onClick={onReset}>저장된 진행 지우고 처음부터</button>}
+        </div>
       </div>
     </main>
   );

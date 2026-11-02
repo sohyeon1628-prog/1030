@@ -10,7 +10,7 @@
 //   GET    /api/auth/oauth/:provider/start, /callback           소셜 로그인(google): 끝나면 /#social=토큰 으로 돌아온다
 //   GET    /api/me                                              → { user, state, updatedAt }   user: { id, nick, email, emailVerified, hasPassword, providers }
 //   PUT    /api/me/state            { state }                   → { ok, updatedAt }   (기기를 바꿔도 이어서 하도록 진행·편지함을 서버에 보관)
-//   POST   /api/me/nick             { nick }                    → { user }
+//   POST   /api/me/nick             { nick }                    → { user }   (소셜로 처음 가입하면 임시 닉네임이라 user.needsNick이 true. 여기서 정하면 false)
 //   POST   /api/me/email            { email, password? }        → { user }   (인증 메일을 보낸다. 빈 값이면 이메일을 지운다)
 //   POST   /api/me/password         { current?, next }          → { ok }   (다른 기기는 로그아웃된다)
 //   DELETE /api/me                  { password? | confirm? }    → { ok }   (계정과 기록을 모두 지운다. 소셜 전용 계정은 닉네임을 입력해 확인)
@@ -55,7 +55,7 @@ export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
     if (!s || s.expires_at < Date.now()) return null;
     return db.userById(s.user_id);
   }
-  const pub = (u) => { const f = db.userById(u.id); return { id: f.id, nick: f.nick, email: f.email || "", emailVerified: !!f.email_verified, hasPassword: !!f.has_pass, providers: db.identitiesOf(f.id) }; };
+  const pub = (u) => { const f = db.userById(u.id); return { id: f.id, nick: f.nick, needsNick: !f.nick_set, email: f.email || "", emailVerified: !!f.email_verified, hasPassword: !!f.has_pass, providers: db.identitiesOf(f.id) }; };
 
   // 이메일 인증 메일(링크 한 번 쓰면 사라지고 1일 안에 눌러야 한다)
   async function sendVerify(req, uid, email) {
@@ -94,7 +94,7 @@ export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
         let uid = db.identity(p, prof.sub);
         if (!uid && prof.verified && prof.email && EMAIL.test(prof.email)) { const same = db.userByEmail(prof.email); if (same) { uid = same.id; db.addIdentity(p, prof.sub, uid); } }   // 같은 인증된 이메일의 계정이면 이어 준다
         if (!uid) {
-          uid = db.addUser(await newNick(prof.name), "", "");
+          uid = db.addTempUser(await newNick("여행자"));              // 구글 이름은 쓰지 않는다. 임시 닉네임으로 만들고, 처음 들어올 때 직접 정하게 한다
           if (prof.verified && prof.email && EMAIL.test(prof.email) && !db.userByEmail(prof.email)) db.setEmail(uid, prof.email, true);
           db.addIdentity(p, prof.sub, uid);
         }

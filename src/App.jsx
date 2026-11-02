@@ -11,6 +11,7 @@ import HowToScreen from "./components/HowToScreen.jsx";
 import NicknameScreen from "./components/NicknameScreen.jsx";
 import ResetScreen from "./components/ResetScreen.jsx";
 import AccountScreen from "./components/AccountScreen.jsx";
+import ChooseNick from "./components/ChooseNick.jsx";
 import { getToken, setToken, getMe, pushState, logout as apiLogout, mergeStates } from "./auth.js";
 import Icon from "./components/Icon.jsx";
 import HaemuSay from "./components/HaemuSay.jsx";
@@ -73,7 +74,7 @@ export default function App() {
   // 앱을 열 때 토큰이 있으면 서버에서 내 기록을 가져온다. 토큰이 만료됐으면 로그아웃 처리한다.
   useEffect(() => {
     if (!getToken()) return;
-    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (sc === "nickname" ? (seen ? "map" : "intro") : sc)); })
+    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (r.user.needsNick && sc !== "pwreset" ? "choosenick" : sc === "nickname" ? (seen ? "map" : "intro") : sc)); })   // 소셜로 처음 왔으면 닉네임부터 직접 정한다
       .catch((e) => { if (e.status === 401) { setToken(""); setAccount(null); } else setSync("offline"); });
   }, [adoptServer]);
   // 기록이 바뀌면 잠시 뒤 서버에 보관한다(로그인한 경우에만). 네트워크가 끊겨도 이 기기에는 이미 저장되어 있다.
@@ -226,6 +227,9 @@ export default function App() {
 
       {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}
 
+      {screen === "choosenick" && account?.nick && (
+        <ChooseNick user={account} onDone={(u) => { setAccount(u); update((s) => ({ ...s, nickname: u.nick })); setScreen(loadState().storySeen ? "map" : "intro"); }} />
+      )}
       {screen === "pwreset" && <ResetScreen token={entry.pwreset} onDone={() => { setToken(""); setAccount(null); setScreen("nickname"); }} />}
       {screen === "account" && account?.nick && (
         <AccountScreen user={account} sync={sync} onBack={() => setScreen("note")} onLogout={doLogout}

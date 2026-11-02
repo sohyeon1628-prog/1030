@@ -26,6 +26,7 @@ export function openDb(DATA) {
   // 예전 DB에 없는 열을 더한다(이메일은 선택, 인증된 것만 서로 겹치지 못한다)
   const cols = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
   if (!cols.includes("email")) db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+  if (!cols.includes("nick_set")) db.exec("ALTER TABLE users ADD COLUMN nick_set INTEGER NOT NULL DEFAULT 1");   // 0이면 소셜로 막 가입해서 아직 닉네임을 정하지 않은 계정
   if (!cols.includes("email_verified")) db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS users_email_verified ON users (email COLLATE NOCASE) WHERE email_verified = 1");
   const q = (sql) => db.prepare(sql);
@@ -36,8 +37,8 @@ export function openDb(DATA) {
     putVoice: q("INSERT INTO voices (id, meta, bin, expires_at) VALUES (?, ?, ?, ?)"), putVoiceMeta: q("UPDATE voices SET meta = ? WHERE id = ?"),
     delVoice: q("DELETE FROM voices WHERE id = ?"), allVoices: q("SELECT meta FROM voices"),
     kvGet: q("SELECT v FROM kv WHERE k = ?"), kvSet: q("INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v"),
-    userByNick: q("SELECT * FROM users WHERE nick = ?"), userById: q("SELECT id, nick, email, email_verified, (pass <> '') AS has_pass, created_at FROM users WHERE id = ?"),
-    userByEmail: q("SELECT * FROM users WHERE email = ? COLLATE NOCASE AND email_verified = 1"), setEmail: q("UPDATE users SET email = ?, email_verified = ? WHERE id = ?"), setNick: q("UPDATE users SET nick = ? WHERE id = ?"), setPass: q("UPDATE users SET pass = ?, salt = ? WHERE id = ?"), userRow: q("SELECT * FROM users WHERE id = ?"),
+    userByNick: q("SELECT * FROM users WHERE nick = ?"), userById: q("SELECT id, nick, nick_set, email, email_verified, (pass <> '') AS has_pass, created_at FROM users WHERE id = ?"),
+    userByEmail: q("SELECT * FROM users WHERE email = ? COLLATE NOCASE AND email_verified = 1"), setEmail: q("UPDATE users SET email = ?, email_verified = ? WHERE id = ?"), setNick: q("UPDATE users SET nick = ?, nick_set = 1 WHERE id = ?"), addUserTemp: q("INSERT INTO users (nick, pass, salt, created_at, nick_set) VALUES (?, '', '', ?, 0)"), setPass: q("UPDATE users SET pass = ?, salt = ? WHERE id = ?"), userRow: q("SELECT * FROM users WHERE id = ?"),
     identity: q("SELECT user_id FROM identities WHERE provider = ? AND sub = ?"), addIdentity: q("INSERT OR IGNORE INTO identities (provider, sub, user_id) VALUES (?, ?, ?)"), identitiesOf: q("SELECT provider FROM identities WHERE user_id = ?"), delIdentities: q("DELETE FROM identities WHERE user_id = ?"),
     addToken: q("INSERT INTO tokens (hash, kind, user_id, data, expires_at) VALUES (?, ?, ?, ?, ?)"), getToken: q("SELECT * FROM tokens WHERE hash = ? AND kind = ?"), delToken: q("DELETE FROM tokens WHERE hash = ?"), delUserTokens: q("DELETE FROM tokens WHERE user_id = ? AND kind = ?"), expTokens: q("DELETE FROM tokens WHERE expires_at < ?"),
     delOtherSessions: q("DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?"),
@@ -61,6 +62,7 @@ export function openDb(DATA) {
     userByNick: (n) => st.userByNick.get(n) || null, userById: (id) => st.userById.get(id) || null,
     addUser: (nick, pass, salt) => Number(st.addUser.run(nick, pass, salt, Date.now()).lastInsertRowid),
     deleteUser: (id) => tx(() => { st.delUserSessions.run(id); st.delState.run(id); st.delIdentities.run(id); ["reset", "verify"].forEach((k) => st.delUserTokens.run(id, k)); st.delUser.run(id); }),
+    addTempUser: (nick) => Number(st.addUserTemp.run(nick, Date.now()).lastInsertRowid),
     userByEmail: (e) => st.userByEmail.get(e) || null, setEmail: (id, email, verified) => st.setEmail.run(email, verified ? 1 : 0, id), setNick: (id, nick) => st.setNick.run(nick, id), setPass: (id, pass, salt) => st.setPass.run(pass, salt, id), userRow: (id) => st.userRow.get(id) || null,
     identity: (p, sub) => st.identity.get(p, sub)?.user_id ?? null, addIdentity: (p, sub, uid) => st.addIdentity.run(p, sub, uid), identitiesOf: (uid) => st.identitiesOf.all(uid).map((r) => r.provider),
     addToken: (hash, kind, uid, data, exp) => st.addToken.run(hash, kind, uid ?? null, data ? JSON.stringify(data) : null, exp),

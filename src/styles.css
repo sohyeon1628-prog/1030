@@ -628,3 +628,26 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .acct-card.danger { box-shadow: 0 2px 0 rgba(192,57,43,.35); } .acct-card.danger h3 { color: #c0392b; }
 .btn.danger { background: #c0392b; box-shadow: 0 3px 0 #8e261c; }
 .acct input { border: 0; border-radius: 14px; padding: 11px 13px; font: inherit; background: #f3f6f9; box-shadow: inset 0 2px 5px rgba(20,60,100,.1); outline: none; color: var(--ink); }
+
+/* 로그인 화면: 구글처럼 단순한 흰 카드 */
+.auth-card { width: min(420px, 94vw); box-sizing: border-box; padding: 36px 36px 26px; background: #ffffff; border-radius: 28px; box-shadow: 0 2px 6px rgba(20,40,70,.18), 0 18px 44px rgba(20,40,70,.22); display: flex; flex-direction: column; gap: 14px; font-family: "Pretendard", "Noto Sans KR", sans-serif; color: #202124; }
+.auth-brand { font: 800 15px var(--sans); color: #d9452c; text-align: center; letter-spacing: .02em; }
+.auth-card h1 { margin: 0; font: 400 24px/1.3 "Pretendard", "Noto Sans KR", sans-serif; text-align: center; color: #202124; text-shadow: none; }
+.auth-sub { margin: -4px 0 6px; text-align: center; font-size: 14px; line-height: 1.6; color: #5f6368; }
+.auth-field { position: relative; display: block; }
+.auth-field input { width: 100%; box-sizing: border-box; height: 52px; padding: 18px 14px 4px; border: 1px solid #dadce0; border-radius: 6px; background: #ffffff; font: 400 16px "Pretendard", "Noto Sans KR", sans-serif; color: #202124; outline: none; transition: border-color .15s, box-shadow .15s; }
+.auth-field input:focus { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+.auth-field span { position: absolute; left: 14px; top: 16px; font-size: 16px; color: #5f6368; pointer-events: none; transition: all .15s; background: transparent; }
+.auth-field input:focus + span, .auth-field input:not(:placeholder-shown) + span { top: 6px; font-size: 11.5px; }
+.auth-field input:focus + span { color: #1a73e8; }
+.auth-link { align-self: flex-start; border: 0; background: none; padding: 6px 4px; font: 600 14px "Pretendard", "Noto Sans KR", sans-serif; color: #1a73e8; cursor: pointer; border-radius: 6px; }
+.auth-link:hover { background: #f0f5fe; } .auth-link.faint { color: #80868b; font-weight: 400; font-size: 12.5px; }
+.auth-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.auth-btn { border: 0; border-radius: 99px; padding: 10px 26px; min-width: 96px; font: 600 14.5px "Pretendard", "Noto Sans KR", sans-serif; background: #d9452c; color: #ffffff; cursor: pointer; box-shadow: none; }
+.auth-btn:hover:not(:disabled) { background: #c23c25; } .auth-btn:disabled { background: #e8eaed; color: #9aa0a6; cursor: default; }
+.auth-or { display: flex; align-items: center; gap: 10px; color: #80868b; font-size: 12.5px; margin: 4px 0 0; }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; border-top: 1px solid #e0e3e7; }
+.auth-google { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border: 1px solid #dadce0; border-radius: 99px; background: #ffffff; color: #3c4043; font: 600 14.5px "Pretendard", "Noto Sans KR", sans-serif; text-decoration: none; }
+.auth-google:hover { background: #f8f9fa; border-color: #d2e3fc; }
+.auth-err { margin: 0; font-size: 13px; color: #d93025; } .auth-ok { margin: 0; font-size: 14px; line-height: 1.6; color: #2c4a6e; font-weight: 600; }
+.auth-foot { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 6px; } .auth-foot .auth-link { align-self: center; font-weight: 500; }
