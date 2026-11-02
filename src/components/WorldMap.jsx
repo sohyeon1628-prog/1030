@@ -189,7 +189,6 @@ function Stop({ i, letter, grade, locked, target, onOpen }) {
 const POST_SPOT = { x: 11.4, y: -1.6 };
 function PostStop({ open, onOpen }) {
   const { x, y } = POST_SPOT, act = () => open && onOpen();
-  const [lx, ly] = P(x + BLOCK / 2, y + BLOCK + 0.5, 0);
   return (
     <g className={`stop ${open ? "" : "locked"}`} role="button" tabIndex={open ? 0 : -1} aria-disabled={!open}
       aria-label={open ? "편지섬: 내 편지 쓰기" : "편지섬: 네 통의 편지를 모두 전하면 열려요"}
@@ -201,9 +200,6 @@ function PostStop({ open, onOpen }) {
         <Slab x={x + 0.7} y={y + 0.6} z={1.33} w={1.2} d={1.1} h={0.8} c={COLORS.cream} rd={8} />
         <Slab x={x + 0.6} y={y + 0.5} z={2.13} w={1.4} d={1.3} h={0.34} c={COLORS.red} rd={9} />
         <Slab x={x + 2.0} y={y + 1.7} z={1.33} w={0.4} d={0.36} h={0.7} c={COLORS.red} rd={6} />
-      </g>
-      <g transform={`translate(${lx} ${ly})`}>
-        <rect x="-80" y="-17" width="160" height="42" rx="21" fill="#faf3e6" />
       </g>
     </g>
   );
