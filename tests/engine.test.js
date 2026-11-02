@@ -86,3 +86,29 @@ test("기록 합치기: 더 나아간 쪽과 합집합을 남긴다", () => {
   assert.ok(m.storySeen && m.howtoSeen && m.muted);
   assert.equal(mergeStates(a, null), a);
 });
+
+// 하늘길 점프: 구름 덩어리와 구멍 앞에서 알맞게 누르면 넘고, 공중에서 걷는 자세가 풀리지 않는다
+function jumpAt(kind, d, seed) {
+  const F = createFlight(letter(2, true, "jp" + seed), true, false); F.viewW = 800;
+  const wk = F.lv.walk, o = wk.obs.find((x) => x.kind === kind); if (!o) return null;
+  wk.obs = [o]; F.lv.rain.length = 0; F.windT = 1e9; for (const k of ["events", "clouds", "bolts", "vortices", "items"]) F.lv[k].length = 0;
+  let t = 0, pressed = false, minWalk = 1;
+  while (!F.finished && t < 120 && F.x < o.x + 200) {
+    if (F.mode === "fly" && !pressed && F.walkK > 0.8 && o.x - F.x <= d) { F.moves.push(1); pressed = true; }
+    stepFlight(F, 1 / 60, {}); t += 1 / 60;
+    if (F.jumpT > 0.05) minWalk = Math.min(minWalk, F.walkK);
+  }
+  return { hits: F.totalHits, minWalk };
+}
+test("하늘길: 장애물 앞 100~180px에서 점프를 누르면 구름 덩어리와 구멍을 모두 넘는다", () => {
+  for (const kind of ["puff", "gap"]) for (const d of [100, 140, 180]) for (let s = 0; s < 8; s++) {
+    const r = jumpAt(kind, d, s); if (!r) continue;
+    assert.equal(r.hits, 0, `${kind} ${d}px 시드${s}에서 부딪혔다`);
+  }
+});
+test("하늘길: 뛰지 않으면 구름 덩어리와 구멍에 부딪힌다", () => {
+  for (const kind of ["puff", "gap"]) { const r = jumpAt(kind, -9999, 1); if (r) assert.ok(r.hits > 0, kind); }
+});
+test("하늘길: 공중에 있는 동안에도 걷는 자세(walkK)가 유지된다", () => {
+  const r = jumpAt("puff", 140, 2); assert.ok(r.minWalk > 0.8, `minWalk ${r.minWalk}`);
+});

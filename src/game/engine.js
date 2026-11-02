@@ -50,7 +50,7 @@ function restart(F) {
   for (const b of F.lv.bolts) { b.state = "idle"; b.t = 0; }
   for (const it of F.lv.items) if (it.x >= F.x) it.taken = false;      // 되돌아간 구간의 아이템은 다시 나타난다
   F.rainK = 0; F.flash = 0; F.combo = 0;
-  F.brace.on = false; F.brace.g = 0.6; F.braceTaps = 0; F.walkK = 0; F.jumpT = 0;
+  F.brace.on = false; F.brace.g = 0.6; F.braceTaps = 0; F.walkK = 0; F.jumpT = 0; F.jumpBuf = 0;
   for (const o of F.lv.walk?.obs || []) o.passed = false;
 }
 
@@ -97,7 +97,7 @@ export function stepFlight(F, dt, fx) {
   // 줄 옮기기: 위·아래로 한 줄씩. 회오리 안에서는 반대로 움직인다.
   const flip = F.rev > 0 ? -1 : 1;
   for (const m of F.moves.splice(0)) {
-    if (inZone) { if (m > 0 && F.jumpT <= 0 && F.walkK > 0.8) { F.jumpT = WALK_JUMP_T; fx.jump?.(); } }   // 하늘길에서는 ↑ = 폴짝
+    if (inZone) { if (m > 0) F.jumpBuf = 0.3; }                                              // 하늘길에서는 ↑ = 폴짝(땅에 닿기 전에 눌러도 0.3초 동안 기억해 두었다가 뛴다)
     else F.lane = clamp(F.lane + m * flip, 0, 2);
   }
 
@@ -129,8 +129,10 @@ export function stepFlight(F, dt, fx) {
   const lifting = F.lift < 1;
   if (lifting) F.lift = Math.min(1, F.lift + dt / TAKEOFF);
   const auto = p >= 0.76;
-  if (inZone) { F.lane = 1; F.jumpT = Math.max(0, F.jumpT - dt); } else F.jumpT = 0;
-  F.walkK += ((inZone && Math.abs(F.y - WALK_Y) < 16 ? 1 : 0) - F.walkK) * (1 - Math.exp(-dt / 0.12));
+  if (inZone) { F.lane = 1; F.jumpT = Math.max(0, F.jumpT - dt); F.jumpBuf = Math.max(0, (F.jumpBuf || 0) - dt); } else { F.jumpT = 0; F.jumpBuf = 0; }
+  // 길 위에 있는 동안(뛰어올라 공중에 있는 동안도 포함)은 걷는 자세로 본다. 공중에서 걷는 자세가 풀리면 점프 높이가 틀어진다.
+  F.walkK += ((inZone && (F.jumpT > 0 || Math.abs(F.y - WALK_Y) < 16) ? 1 : 0) - F.walkK) * (1 - Math.exp(-dt / 0.12));
+  if (inZone && F.jumpBuf > 0 && F.jumpT <= 0 && F.walkK > 0.8) { F.jumpT = WALK_JUMP_T; F.jumpBuf = 0; fx.jump?.(); }
   const walking = inZone && F.walkK > 0.8;
   const ju = 1 - F.jumpT / WALK_JUMP_T, jh = F.jumpT > 0 ? WALK_JUMP * 4 * ju * (1 - ju) : 0;
   const target = inZone ? WALK_Y : auto ? guide(p) : LANE_Y[F.lane];
@@ -147,7 +149,7 @@ export function stepFlight(F, dt, fx) {
     F.windT -= dt;
     if (F.windState === "none" && F.windT <= 0) {
       F.windState = "warn"; F.windT = 0.7;
-      if (!F.hinted.w) { F.hinted.w = true; say(F, F.touch ? "비바람이 몰려와요! 화면을 연달아 눌러 버텨요" : "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
+      if (!F.hinted.w) { F.hinted.w = true; say(F, F.touch ? "비바람이 몰려와요! 왼쪽 아래 버튼을 연달아 눌러 버텨요" : "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
     } else if (F.windState === "warn" && F.windT <= 0) {
       F.windState = "blow"; F.windT = 1.4 + 0.4 * ws + Math.random() * 1.0;
     } else if (F.windState === "blow" && F.windT <= 0) {
@@ -157,7 +159,7 @@ export function stepFlight(F, dt, fx) {
   const slow = 0;                                          // 바람은 속도를 늦추지 않는다. 대신 Enter를 연타해 버텨야 한다(아래 버티기)
   F.windPush += (slow - F.windPush) * (1 - Math.exp(-dt / 0.25));
   const base = F.practice ? VX_PRACTICE : speedAt(p);                                           // 진행할수록 빨라진다(연습은 일정)
-  const vx = base * (F.ribbon > 0 ? 1.3 : 1) * (0.3 + 0.7 * F.lift) * (inZone ? 0.8 : 1);   // 이륙하며 속도가 붙는다
+  const vx = base * (F.ribbon > 0 ? 1.3 : 1) * (0.3 + 0.7 * F.lift) * (inZone ? 0.7 : 1);   // 이륙하며 속도가 붙는다
   F.vx = vx;
   F.x = clamp(F.x + vx * dt, 0, LEN);
 
@@ -203,17 +205,17 @@ export function stepFlight(F, dt, fx) {
   const storm = !calm && !inZone && F.ribbon <= 0 && (F.windState === "blow" || raining);
   if (storm) {
     const B = F.brace;
-    if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, F.touch ? "화면을 연달아 눌러 게이지를 채워요! 줄 옮기기는 쓸어서 해요" : "Enter를 연달아 눌러 게이지를 채워요!", 3.2); } }
+    if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, F.touch ? "왼쪽 아래 버튼을 연달아 눌러 게이지를 채워요!" : "Enter를 연달아 눌러 게이지를 채워요!", 3.2); } }
     B.g = clamp(B.g + taps * 0.11 - dt * (0.26 + 0.03 * ws) * (F.umbrella > 0 && raining ? 0.7 : 1), 0, 1);
     if (B.g <= 0) { B.g = 0.5; say(F, "바람에 밀렸어요! 더 빨리 눌러요", 1.6); if (hit()) return; }
   } else F.brace.on = false;
 
   // 하늘길의 장애물: 구름 덩어리는 뛰어 넘고, 구멍은 뛰어 건넌다
   if (inZone && F.walkK > 0.5) {
-    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "하늘길이에요! ↑ 로 폴짝 뛰어 구름과 구멍을 넘어요", 3.6); }
+    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "하늘길이에요! 구름과 구멍 앞에서 "점프!" 표시가 빨개지면 ↑(휴대폰은 화면 위쪽)을 눌러 뛰어요", 3.6); }
     for (const o of wk.obs) {
       const dx = Math.abs(F.x - o.x), dy = F.y - WALK_Y;
-      const bad = o.kind === "puff" ? dx < o.w / 2 + R * 0.6 && dy < o.h - 4 : dx < o.w / 2 - 14 && dy < 14;
+      const bad = o.kind === "puff" ? dx < o.w / 2 + R * 0.4 && dy < o.h - 6 : dx < o.w / 2 - 14 && dy < 14;
       if (bad && hit()) return;
       if (!o.passed && F.x - o.x > o.w / 2 + R) { o.passed = true; if (F.inv <= 0) dodged(); }
     }

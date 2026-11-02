@@ -16,7 +16,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
   const pausedRef = useRef(false);
   const startRef = useRef(null);        // 포인터를 누른 위치(스와이프 판별)
   const braceRef = useRef(0);           // 비바람 버티기: Enter(또는 버튼)를 누른 횟수
-  const braceOnRef = useRef(false);     // 비바람 버티기 중인가(터치는 이때 화면 연타가 버티기가 된다)
+  const [braceOn, setBraceOn] = useState(false);   // 비바람 버티기 중인가(이때 왼쪽 아래에 큰 버튼이 나온다)
   const touch = useRef(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches).current;
   const [zones, setZones] = useState(true);   // 처음 몇 초 동안 위·아래 터치 영역을 옅게 보여 준다
   useEffect(() => { const t = setTimeout(() => setZones(false), 7000); return () => clearTimeout(t); }, []);
@@ -51,7 +51,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
         F.viewW = cvs.width;
         while (movesRef.current.length) F.moves.push(movesRef.current.shift());
         F.braceTaps += braceRef.current; braceRef.current = 0;
-        if (F.brace.on !== braceShown) { braceShown = F.brace.on; braceOnRef.current = braceShown; }
+        if (F.brace.on !== braceShown) { braceShown = F.brace.on; setBraceOn(braceShown); }
         stepFlight(F, dt, fx);
         audioUpdate(F.thrust);
         if (!seenMarked && F.mode === "fly" && !practice) { seenMarked = true; onTutorialSeen(); }
@@ -86,20 +86,20 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [letter]);
 
-  // 화면 조작(터치·마우스): 위·아래로 40px 넘게 쓸면 그 방향으로 한 줄. 가볍게 누르면 화면 위쪽 40%는 위로, 아래쪽 40%는 아래로(가운데 20%는 반응 없음).
-  // 비바람 버티기 중에는 가볍게 누르는 것이 버티기 연타가 되고, 줄 옮기기는 쓸어서 한다.
+  // 화면 조작(터치·마우스): 위·아래로 40px 넘게 쓸면 그 방향으로 한 줄. 가볍게 누르면 화면 위쪽 절반은 위로, 아래쪽 절반은 아래로.
+  // 비바람 버티기는 왼쪽 아래의 큰 "버티기" 버튼을 연타한다(Enter 키도 된다).
   const onDown = (e) => { if (e.button === 0) { startRef.current = { y: e.clientY }; audioStart(); } };
   const onUp = (e) => {
     const s = startRef.current; startRef.current = null;
     if (!s || pausedRef.current) return;
-    const act = touchAction(e.clientY - s.y, e.clientY / innerHeight, braceOnRef.current);
-    if (act.type === "move") move(act.dir); else if (act.type === "brace") braceRef.current++;
+    move(touchAction(e.clientY - s.y, e.clientY / innerHeight).dir);
   };
   const stop = (e) => e.stopPropagation();
 
   return (
     <div className="stage" onPointerDown={onDown} onPointerUp={onUp} onContextMenu={(e) => e.preventDefault()}>
       <canvas ref={canvasRef} width={W} height={H} />
+      {braceOn && <button className="brace-btn" onPointerDown={(e) => { stop(e); braceRef.current++; }} onPointerUp={stop} aria-label="버티기">{touch ? "연타!" : "버티기"}<small>{touch ? "버티기" : "Enter"}</small></button>}
       {zones && !paused && (
         <div className="zones" aria-hidden="true"><span className="zone up"><Icon name="up" size={30} />{touch ? "여기를 누르면 위로" : "위쪽을 누르면 위로"}</span><span className="zone down"><Icon name="down" size={30} />{touch ? "여기를 누르면 아래로" : "아래쪽을 누르면 아래로"}</span></div>
       )}

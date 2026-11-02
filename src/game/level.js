@@ -112,7 +112,7 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   if (walk) {
     let k = 0;
     for (let x = walk.a + 560; x < walk.b - 380; x += 470 + rnd() * 200, k++) {
-      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "puff", x, w: 70, h: 58, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
+      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "puff", x, w: 60, h: 50, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
     }
   }
 
@@ -168,7 +168,7 @@ export function buildPracticeLevel() {
     [0.51, "방패가 있으면 새에게 부딪혀도 한 번은 괜찮아요. 일부러 부딪혀 봐도 돼요."],
     [0.55, "회오리에 들어가면 2초 동안 위아래가 반대로 돼요. 피하거나, 들어가 보고 느껴 봐요."],
     [0.65, "번개는 노란 띠와 !가 뜬 줄에 내리쳐요. 그 줄에서 벗어나요."],
-    [0.7, "비바람이에요! Enter(휴대폰은 화면)를 연달아 눌러 버티기 게이지를 채워요. 비가 오면 줄 옮기기도 느려져요. 우산을 얻으면 덜 힘들어요."],
+    [0.7, "비바람이에요! Enter(휴대폰은 왼쪽 아래 버튼)를 연달아 눌러 버티기 게이지를 채워요. 비가 오면 줄 옮기기도 느려져요. 우산을 얻으면 덜 힘들어요."],
     [0.84, "착륙은 자동이에요. 이제 장애물은 나오지 않아요. 편안히 내려앉아요. 연습 끝!"],
   ].map(([p, text], n, a) => ({ x: X(p), text, n: n + 1, total: a.length, done: false }));
   return {

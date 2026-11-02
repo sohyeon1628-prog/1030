@@ -386,6 +386,17 @@ function skyRoad(ctx, F, camX, sy, W) {
     const x = o.x - camX; if (x < -70 || x > W + 70) continue;
     stormCloud(ctx, x, sy(WALK_TOP + o.h * 0.5) + 2, 1.15);
   }
+  // 다가오는 장애물 위에 "점프!" 표시: 뛰어야 할 때(약 0.5초 전)부터 깜빡이며 위아래로 흔들린다
+  if (F.mode === "fly") for (const o of w.obs) {
+    const ahead = o.x - F.x;
+    if (ahead < 40 || ahead > 340 || o.passed) continue;
+    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = ahead < 200;                    // 이때 누르면 뛰어넘는다
+    ctx.save(); ctx.globalAlpha = hot ? 0.95 : 0.55; ctx.textAlign = "center";
+    const y = sy(WALK_TOP + (o.kind === "puff" ? o.h : 8)) - 46 + bob;
+    path(ctx, () => { ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 14); ctx.closePath(); }); ctx.fillStyle = hot ? "#e8553a" : "#ffffff"; ctx.fill();
+    ctx.font = `20px ${SANS}`; outlined(ctx, "점프!", x, y - 6);
+    ctx.restore();
+  }
 }
 
 export function drawFlight(ctx, F) {
@@ -661,7 +672,7 @@ export function drawFlight(ctx, F) {
     rr(ctx, W / 2 - 150, 150, 300, 14, 7, "rgba(31,74,99,.2)");
     rr(ctx, W / 2 - 150, 150, Math.max(8, 300 * g), 14, 7, col);
     ctx.font = `22px ${SANS}`; ctx.textAlign = "center";
-    outlined(ctx, low ? (F.touch ? "화면을 연타! 연타!" : "Enter 연타! 연타!") : (F.touch ? "화면을 연달아 눌러 버텨요" : "Enter를 연달아 눌러 버텨요"), W / 2, 188);
+    outlined(ctx, low ? (F.touch ? "버튼 연타! 연타!" : "Enter 연타! 연타!") : (F.touch ? "왼쪽 아래 버튼을 연달아 눌러 버텨요" : "Enter를 연달아 눌러 버텨요"), W / 2, 188);
     ctx.restore();
   }
 
@@ -697,7 +708,7 @@ export function drawFlight(ctx, F) {
     }
   }
   if (F.mode === "fly" && F.windState === "warn") {
-    ctx.font = `22px ${SANS}`; outlined(ctx, F.touch ? "비바람이 몰려온다! 화면 연타 준비" : "비바람이 몰려온다! Enter 준비", W / 2, 180);
+    ctx.font = `22px ${SANS}`; outlined(ctx, F.touch ? "비바람이 몰려온다! 버튼 연타 준비" : "비바람이 몰려온다! Enter 준비", W / 2, 180);
   }
   if (F.msgT > 0) {
     ctx.font = `24px ${SANS}`;

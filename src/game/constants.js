@@ -25,8 +25,8 @@ export const COMBO_SHIELD = 8;  // 연속으로 이만큼 피하면 깃털 방�
 // 하늘길 걷기(3장부터): 날다가 구름 길에 내려 걷는 구간. ↑로 폴짝 뛰어 구름 덩어리와 구멍을 넘는다.
 export const WALK_TOP = 190;               // 구름 길 윗면 높이
 export const WALK_Y = WALK_TOP + FOOT;     // 길 위에 서 있을 때 몸통 중심 높이
-export const WALK_JUMP = 125;              // 뛰어오르는 높이
-export const WALK_JUMP_T = 0.72;           // 한 번 뛰어서 내려오기까지(초)
+export const WALK_JUMP = 140;              // 뛰어오르는 높이
+export const WALK_JUMP_T = 0.8;           // 한 번 뛰어서 내려오기까지(초)
 // 도착 지점 2초 전부터는 장애물이 나오지 않는다(착륙 전 마지막 2초, 최고 속도 기준 거리)
 export const LAND_P = 0.95;
 export const CALM_DIST = 2 * VX_MAX;
