@@ -10,13 +10,14 @@ import NoteScreen from "./components/NoteScreen.jsx";
 import HowToScreen from "./components/HowToScreen.jsx";
 import NicknameScreen from "./components/NicknameScreen.jsx";
 import Icon from "./components/Icon.jsx";
+import HaemuSay from "./components/HaemuSay.jsx";
 import ShareBox from "./components/ShareBox.jsx";
 import { NAME_TOKEN } from "./components/WriteScreen.jsx";
 import { uploadLetters } from "./share.js";
 import { GRADE_NAME } from "./data/letters.js";
 import { buildLetters } from "./data/chapters.js";
 import { FLIGHT_BY_GAP, FLIGHT_COMMON, DELAYS, pickReply } from "./data/story.js";
-import { loadState, saveState, recordDelivery, addMine } from "./storage.js";
+import { loadState, saveState, recordDelivery, addMine, completeAll, TEST_NICK } from "./storage.js";
 import { setMuted } from "./game/audio.js";
 import { saveVoice, deleteVoice } from "./party/audio.js";
 import { fmtWhen } from "./party/config.js";
@@ -25,7 +26,8 @@ import { fmtWhen } from "./party/config.js";
 // 바다 지도는 비행 화면을 뺀 모든 화면의 전체 배경이다.
 export default function App() {
   const [state, setState] = useState(() => {
-    const s = loadState();
+    let s = loadState();
+    if (s.nickname === TEST_NICK && !s.delivered.l4) { s = completeAll(s); saveState(s); }   // 테스트 닉네임이면 퀘스트를 모두 완료한 상태로
     setMuted(s.muted);
     return s;
   });
@@ -50,7 +52,7 @@ export default function App() {
   const firstTime = !state.practiceDone && Object.keys(state.grade).length === 0;
   // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 해무가 부르는 이름이자 내 편지의 보내는 사람 이름이다.
   const submitNick = (n) => {
-    update((s) => ({ ...s, nickname: n }));
+    update((s) => (n === TEST_NICK ? completeAll({ ...s, nickname: n }) : { ...s, nickname: n }));
     if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(home);
   };
   // 테스트용 초기화: 저장된 진행(이야기·편지함·녹음·닉네임)을 모두 지우고 처음 상태로 다시 연다.
@@ -136,7 +138,6 @@ export default function App() {
   const isUnlocked = (i) => i === 0 || !!state.grade[letters[i - 1].id];
   const storyDone = !!state.delivered.l4;
   const orbsTotal = Object.values(state.orbs || {}).reduce((a, b) => a + b, 0) + (state.orbExtra || 0);   // 모은 기억 구슬 전부
-  const pathCount = Object.keys(state.grade).length + state.mine.length;
   const idx = letter ? letters.findIndex((l) => l.id === letter.id) : -1;
   const next = idx >= 0 ? letters[idx + 1] : null;
 
@@ -197,10 +198,6 @@ export default function App() {
           <header>
             <button className="icon-btn left" onClick={() => setHowto(true)} aria-label="도움말" title="도움말"><Icon name="help" size={22} /></button>
             <h1>나루 우체국</h1>
-            {/* 진행도: 글자 대신 이어진 바람길 네 칸 */}
-            <div className="progress" role="img" aria-label={`이어진 바람길 ${Math.min(pathCount, 4)} / 4`}>
-              {[0, 1, 2, 3].map((k) => <span key={k} className={k < pathCount ? "on" : ""} />)}
-            </div>
             <button className="icon-btn right" onClick={toggleMute} aria-label={state.muted ? "소리 켜기" : "소리 끄기"} title={state.muted ? "소리 켜기" : "소리 끄기"}><Icon name={state.muted ? "mute" : "sound"} size={22} /></button>
           </header>
           <div className="row dock">
@@ -224,7 +221,7 @@ export default function App() {
             <p>{letter.context}</p>
             {idx > 0 && <p className="prev"><b>지난 이야기</b> {letters[idx - 1].reply}</p>}
           </aside>
-          <p className="memo">우체부 해무: {letter.memo}</p>
+          <HaemuSay text={letter.memo} />
           <article className="paper">
             <h2>{letter.title}</h2>
             <div className="route">{letter.from} → {letter.to}</div>

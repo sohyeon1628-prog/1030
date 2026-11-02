@@ -1,4 +1,4 @@
-import { H, LEN, LAND_Y, LANE_Y, VX, VX_MAX } from "./constants.js";
+import { H, LEN, LAND_Y, LANE_Y, VX, VX_MAX, WALK_Y } from "./constants.js";
 
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -36,6 +36,9 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   const pick = (a) => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
   const lane = () => pick([0, 1, 2]);
   const clouds = [], vortices = [], events = [], bolts = [], blocks = [];
+  // 하늘길(3장부터): 이 구간은 날지 않고 구름 길을 걷는다. 사고는 이 구간 앞뒤로 비워 둔다.
+  const walk = f.skyWalk ? { a: 0.52 * LEN, b: 0.7 * LEN, obs: [] } : null;
+  const inWalk = (x, pad = 0) => walk && x > walk.a - pad && x < walk.b + pad;
 
   const free = (l, a, b) => !blocks.some((k) => k.lane === l && k.b > a && k.a < b);
   const fits = (want) => {                                   // want: [{lane, a, b}] — 더해도 어느 x에서나 한 줄은 비어 있는가
@@ -81,7 +84,9 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
     { w: 0.5, min: 0.4, make: (x) => { const l = lane(); return commit([{ lane: l, a: x - 60, b: x + 60 }], () => vortices.push({ x, lane: l, y: LANE_Y[l], r: 55, inside: false })); } },
   ];
 
-  for (let x = 0.07 * LEN; x < 0.86 * LEN;) {
+  // 사고는 도착 2초 전(착륙 직전)보다 훨씬 앞에서 끝난다: 마지막 사고의 위험이 사라지는 자리까지 계산해 0.78에서 멈춘다
+  for (let x = 0.07 * LEN; x < 0.78 * LEN;) {
+    if (walk && x > walk.a - 1000 && x < walk.b + 100) { x = walk.b + 400; continue; }
     const p = x / LEN;
     const pool = patterns.filter((q) => p >= q.min);
     for (let tries = 0; tries < 4; tries++) {                    // 세 줄을 다 막는 패턴이면 다른 패턴을 다시 뽑는다
@@ -94,12 +99,27 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
     x += base * (rnd() < 0.2 ? 0.45 : 0.7 + rnd() * 0.9);
   }
   // 비: 바람이 거센 편지일수록 자주, 오래 내린다. 시작 자리는 매번 다르다.
+  // 하늘길이 있으면 그 구간을 비켜 앞·뒤에 나눠 내린다. 모든 비는 도착 2초 전(0.86)보다 먼저 그친다.
   const rain = [];
-  for (let i = 0; i < ws; i++) { const a = 0.12 + i * 0.25 + rnd() * 0.12; rain.push([a, a + 0.08 + 0.04 * ws * rnd()]); }
+  for (let i = 0; i < ws; i++) {
+    const base = walk ? [0.12, 0.32, 0.73][i] : 0.12 + i * 0.25, a = base + rnd() * 0.08;
+    let b = a + 0.08 + 0.04 * ws * rnd();
+    b = Math.min(b, 0.84, walk && i === 1 ? 0.48 : 1);
+    rain.push([a, b]);
+  }
+
+  // 하늘길의 장애물: 낮은 먹구름 덩어리(위로 넘는다)와 구름 길의 구멍(뛰어 건넌다)
+  if (walk) {
+    let k = 0;
+    for (let x = walk.a + 560; x < walk.b - 380; x += 470 + rnd() * 200, k++) {
+      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "puff", x, w: 70, h: 58, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
+    }
+  }
 
   // ── 아이템: 사고가 나는 줄을 피해, 안전한 줄에만 놓는다(길을 알려 주는 역할도 한다) ──
   const items = [];
-  const put = (kind, x, prefer = -1) => {
+  const put = (kind, x0, prefer = -1) => {
+    const x = inWalk(x0, 60) ? walk.a - 160 : x0;                // 하늘길 안에는 줄 아이템을 놓지 않는다
     const safe = [0, 1, 2].filter((l) => free(l, x - 50, x + 50));
     if (!safe.length) return -1;
     const l = safe.includes(prefer) ? prefer : pick(safe);
@@ -109,14 +129,19 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   for (let g = 0; g < 3; g++) {                                  // 기억 구슬: 세 개씩 세 무리, 자리는 매번 다르다
     let l = -1;
     const x0 = (0.16 + g * 0.22 + rnd() * 0.08) * LEN;
+    if (walk && g === 1 && walk.obs.length) {                    // 하늘길에서는 구름 덩어리 위로 뛰어올라 모은다
+      const o = walk.obs[Math.min(1, walk.obs.length - 1)];
+      for (let k = -1; k <= 1; k++) items.push({ kind: "orb", x: o.x + k * 60, lane: 1, y: WALK_Y + 95, taken: false });
+      continue;
+    }
     for (let k = 0; k < 3; k++) l = put("orb", x0 + k * 110, l);
   }
   put("shield", (0.22 + rnd() * 0.12) * LEN); put("shield", (0.52 + rnd() * 0.12) * LEN);   // 깃털 방패
   put("heart", (0.38 + rnd() * 0.1) * LEN); if (ws >= 2) put("heart", (0.64 + rnd() * 0.1) * LEN);   // 심장
   put("ribbon", (0.45 + rnd() * 0.25) * LEN);                    // 순풍 리본
-  put("umbrella", Math.max(0.06 * LEN, rain[0][0] * LEN - 500)); // 우산(첫 비 직전)
+  if (rain.length) put("umbrella", Math.max(0.06 * LEN, rain[0][0] * LEN - 500)); // 우산(첫 비 직전)
   items.sort((a, b) => a.x - b.x);
-  return { f, clouds, vortices, events, warn: warnAt(0), bolts, rain, items, blocks };
+  return { f, clouds, vortices, events, warn: warnAt(0), bolts, rain, items, blocks, walk };
 }
 
 // 연습 비행: 처음 하는 사람을 위해 구슬·아이템·위험 하나하나를 차례로 만나고, 위험이 닥치는 곳을 짚어 주는 짧은 코스.
@@ -143,11 +168,11 @@ export function buildPracticeLevel() {
     [0.51, "방패가 있으면 새에게 부딪혀도 한 번은 괜찮아요. 일부러 부딪혀 봐도 돼요."],
     [0.55, "회오리에 들어가면 2초 동안 위아래가 반대로 돼요. 피하거나, 들어가 보고 느껴 봐요."],
     [0.65, "번개는 노란 띠와 !가 뜬 줄에 내리쳐요. 그 줄에서 벗어나요."],
-    [0.7, "비가 오면 날개가 젖어 줄 옮기기가 느려져요. 우산을 얻으면 괜찮아요."],
-    [0.8, "착륙은 자동이에요. 편안히 내려앉아요. 연습 끝!"],
+    [0.7, "비바람이에요! Enter를 연달아 눌러 버티기 게이지를 채워요. 비가 오면 줄 옮기기도 느려져요. 우산을 얻으면 덜 힘들어요."],
+    [0.84, "착륙은 자동이에요. 이제 장애물은 나오지 않아요. 편안히 내려앉아요. 연습 끝!"],
   ].map(([p, text], n, a) => ({ x: X(p), text, n: n + 1, total: a.length, done: false }));
   return {
     f: { windStrength: 1, corridorWidth: 260, gustPattern: "steady", checkpoints: [0], landingTolerance: 0.35 },
-    clouds, vortices, events, warn: 1.2, bolts, rain: [[0.74, 0.8]], items, coach,
+    clouds, vortices, events, warn: 1.2, bolts, rain: [[0.72, 0.82]], items, coach, walk: null,
   };
 }

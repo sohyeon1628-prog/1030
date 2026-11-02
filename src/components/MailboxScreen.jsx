@@ -34,7 +34,7 @@ function OrbCard({ total }) {
       <ul className="orb-rewards">
         {tiers.map((p) => (
           <li key={p.id} className={total >= p.need ? "on" : ""}>
-            <i className="sw" style={{ background: p.color }} />{p.label} 편지지<em>구슬 {p.need}개 · {total >= p.need ? "열림" : "잠김"}</em>
+            <i className="sw" style={{ background: p.color }} />{p.label} 편지지<em>{p.note} · 구슬 {p.need}개 · {total >= p.need ? "열림" : "잠김"}</em>
           </li>
         ))}
         <li><i className="sw memo" />이야기 편지 도착 장면의 기억<em>한 번에 3개 이상: 한 줄 · 7개 이상: 두 줄</em></li>
@@ -97,7 +97,7 @@ export default function MailboxScreen({ orbsTotal = 0, mine, grades, focusId = n
     const color = PAPERS.find((p) => p.id === opened.paper)?.color;
     return (
       <main className="screen center">
-        <article className="paper" style={{ background: color }}>
+        <article className={`paper paper-${opened.paper}`} style={{ backgroundColor: color }}>
           <h2>{opened.to}에게</h2>
           <div className="route">{fmt(opened.createdAt)}에 부친 편지 · {GRADE_NAME[opened.grade]}</div>
           {opened.body.split("\n").map((l, i) => <p key={i}>{l}</p>)}

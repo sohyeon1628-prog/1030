@@ -80,7 +80,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
 
       <div className="wt-stage" ref={stage} onPointerMove={tilt}>
         <div className="wt-tilt">
-          <article className="paper wt-paper" style={{ backgroundColor: color }}>
+          <article className={`paper wt-paper paper-${paper}`} style={{ backgroundColor: color }}>
             <label className="wt-dear">
               <input value={to} maxLength={60} autoFocus placeholder="누구에게" aria-label="받는 사람 (여러 명은 쉼표로)" onChange={(e) => setTo(e.target.value)} />
               <span>에게</span>
@@ -93,13 +93,14 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
             {PAPERS.map((p) => {
               const locked = p.need > orbsTotal;           // 기억 구슬을 충분히 모아야 열린다
               return (
-                <button key={p.id} role="radio" aria-checked={paper === p.id} disabled={locked} className={`wt-swatch ${paper === p.id ? "on" : ""} ${locked ? "locked" : ""}`}
-                  style={{ "--c": p.color }} onClick={() => setPaper(p.id)} title={locked ? `${p.label} 편지지 · 기억 구슬 ${p.need}개` : `${p.label} 편지지`} aria-label={`${p.label} 편지지${locked ? `, 기억 구슬 ${p.need}개 필요` : ""}`}>
+                <button key={p.id} role="radio" aria-checked={paper === p.id} disabled={locked} className={`wt-swatch sw-${p.id} ${paper === p.id ? "on" : ""} ${locked ? "locked" : ""}`}
+                  style={{ "--c": p.color }} onClick={() => setPaper(p.id)} title={locked ? `${p.label} 편지지 · ${p.note} · 기억 구슬 ${p.need}개로 열려요` : `${p.label} 편지지 · ${p.note}`} aria-label={`${p.label} 편지지${locked ? `, 기억 구슬 ${p.need}개 필요` : ""}`}>
                   {locked && <span className="need"><Icon name="lock" size={12} />{p.need}</span>}
                 </button>
               );
             })}
           </div>
+          <p className="wt-paper-note">{PAPERS.find((p) => p.id === paper).label} 편지지 · {PAPERS.find((p) => p.id === paper).note}{PAPERS.some((p) => p.need > orbsTotal) && <small> · 기억 구슬을 모으면 별빛·황금 편지지가 열려요</small>}</p>
           {names.length > 1 && <p className="wt-hint">본문에 {NAME_TOKEN}이라고 쓰면 받는 사람마다 그 사람 이름으로 바뀌어요</p>}
 
           {/* 도착 장면과 내 목소리: 받는 사람이 링크를 열면 이 장면에서 해무가 편지를 배달한다 */}

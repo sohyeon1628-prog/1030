@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { buildBottleScript, sentences, EPILOGUE_PLAYBACK } from "../data/chapters.js";
-import { POST_ISLAND, buildIsland, makePostman, animatePostman, makeBottle, makeGull, animateGull, waterTexture } from "../three/parts.js";
+import { POST_ISLAND, buildIsland, makePostman, animatePostman, standStraight, blinkEyes, makeBottle, makeGull, animateGull, waterTexture } from "../three/parts.js";
 import { audioStart, audioStop, fx } from "../game/audio.js";
 
 // 병 편지 에필로그(열린 결말): 노을 지는 편지섬 기슭. 이 세계의 편지는 하늘의 바람길로 오는 것이 당연해서, 바다의 결을 따라 온 유리병을 의아해하며 연다.
@@ -25,11 +25,11 @@ const P0 = new THREE.Vector3(POST_ISLAND.x, 0, POST_ISLAND.z);
 const SPOT = new THREE.Vector3(P0.x - 2.55, 0, P0.z + 0.2);                  // 내가 서 있는 자리: 집에서 떨어진 잔디 서쪽 가장자리(서쪽을 본다)
 const REST = new THREE.Vector3(SPOT.x - 0.85, 0.03, SPOT.z);                 // 병이 부딪혀 멈추는 물가(내 바로 앞)
 // 서 있을 때의 발 높이: 모델의 가장 낮은 점이 잔디에 닿도록 잰다
-const STAND_Y = (() => { const m = makePostman(); m.scale.setScalar(PSCALE); m.children[0].rotation.z = -0.08; return GT + 0.02 - new THREE.Box3().setFromObject(m).min.y; })();
+const STAND_Y = (() => { const m = makePostman(); standStraight(m); m.scale.setScalar(PSCALE); m.children[0].rotation.z = -0.08; return GT + 0.02 - new THREE.Box3().setFromObject(m).min.y; })();
 // 펼친 편지가 떠 있는 자리: 내 앞(서쪽) 바다 위. 어깨 너머 컷에서 카메라가 내 뒤에서 이 편지를 본다.
 const PAPER = new THREE.Vector3(SPOT.x - 1.4, STAND_Y + 0.5, SPOT.z - 0.15);
 const ROUTE = new THREE.CatmullRomCurve3([new THREE.Vector3(-20, 0.03, 21), new THREE.Vector3(-14, 0.03, 18.4), new THREE.Vector3(-9, 0.03, 16.0), new THREE.Vector3(-6, 0.03, 14.6), REST]);
-const FOVS = { wide: 42, char: 40, bottle: 38, face: 34, pov: 58, side: 38, fp: 62, ots: 46 };
+const FOVS = { wide: 42, char: 40, bottle: 38, face: 34, pov: 52, side: 38, fp: 50, ots: 46 };
 const DUSK = { sky: new THREE.Color("#f6a97c"), hemiSky: new THREE.Color("#ffd2a8"), hemiGround: new THREE.Color("#4d8fc0"), sun: new THREE.Color("#ffc890") };
 
 // 읽을 수 없는 손글씨 줄(내용은 보여 주지 않는다)
@@ -125,7 +125,7 @@ export default function Bottle3D({ nickname = "", onDone }) {
     const dots = Array.from({ length: 22 }, () => { const d = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), new THREE.MeshBasicMaterial({ color: "#ffd166", transparent: true, opacity: 0.9, fog: false })); scene.add(d); return d; });
 
     // 나
-    const me = makePostman(); me.scale.setScalar(PSCALE); me.children[0].rotation.z = -0.08; me.position.set(SPOT.x, STAND_Y, SPOT.z); me.rotation.y = Math.PI;
+    const me = makePostman(); standStraight(me); me.scale.setScalar(PSCALE); me.children[0].rotation.z = -0.08; me.position.set(SPOT.x, STAND_Y, SPOT.z); me.rotation.y = Math.PI;
     me.traverse((o) => { o.castShadow = true; }); world.add(me);
     const lean = me.children[0], myHead = me.userData.head;
 
@@ -133,7 +133,8 @@ export default function Bottle3D({ nickname = "", onDone }) {
     const holder = new THREE.Group(), tilt = new THREE.Group(), bottle = makeBottle(); bottle.scale.setScalar(BS);
     holder.add(tilt); tilt.add(bottle); world.add(holder);
     const cork = bottle.userData.cork, scrollIn = bottle.userData.scroll;
-    const bottleGlow = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), new THREE.MeshBasicMaterial({ color: "#fff2b0", transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending })); holder.add(bottleGlow);   // 멀리서도 반짝여 보이게
+    const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const k = c.getContext("2d"), g = k.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, "rgba(255,242,176,.9)"); g.addColorStop(1, "rgba(255,242,176,0)"); k.fillStyle = g; k.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+    const bottleGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending })); bottleGlow.scale.setScalar(0.9); holder.add(bottleGlow);   // 부드러운 빛 번짐(각진 구 모양이 보이지 않게 스프라이트로)   // 멀리서도 반짝여 보이게
     // 병 밖으로 나온 편지(말린 것 → 펼친 것)
     const scrollOut = bottle.userData.scroll.clone(); scrollOut.scale.setScalar(BS * 1.15); scrollOut.visible = false; world.add(scrollOut);
     const ptex = scribbleTexture();
@@ -190,7 +191,8 @@ export default function Bottle3D({ nickname = "", onDone }) {
         case "side": tPos.set(SPOT.x - 1.0, STAND_Y + 0.35, SPOT.z + 2.6); tLook.set(SPOT.x - 0.9, STAND_Y + 0.1, SPOT.z); break;
         case "fp": {                                                                                                                       // 1인칭: 물가의 병을 내려다보다가, 병을 들고 마개를 본다
           const q = smooth((T - AT.pickFrom) / (AT.pickTo - AT.pickFrom));
-          tPos.copy(eye); tLook.copy(REST).add(tmp.set(0, 0.1, 0)).lerp(tmp.copy(eye).add(new THREE.Vector3(-1, -0.15, 0)), q); break;
+          // 병을 주우러 가기 전에는 한 걸음 뒤에서 비스듬히 내려다보고(가파르게 내려다보면 물결이 일그러진다), 병을 들면서 눈높이로 다가온다
+          tPos.copy(eye).add(tmp.set(0.55 * (1 - q), 0.14 * (1 - q), 0)); tLook.copy(REST).add(tmp.set(0, 0.12, 0)).lerp(tmp.copy(eye).add(new THREE.Vector3(-1, -0.15, 0)), q); break;
         }
         default: tPos.copy(headW).add(tmp.set(1.0, 0.2, -0.38)); tLook.copy(PAPER); break;                                                 // ots: 인물의 어깨 너머로 펼쳐진 편지
       }
@@ -221,6 +223,7 @@ export default function Bottle3D({ nickname = "", onDone }) {
       lean.rotation.z = -0.08;
       me.position.set(SPOT.x, STAND_Y + Math.sin(A * 1.8) * 0.01, SPOT.z); animatePostman(me, A, 0.12);
       me.rotation.y = Math.PI + Math.sin(A * 0.4) * 0.05;
+      { const bp = (A % 3.6); blinkEyes(me, bp < 0.16 ? Math.sin((bp / 0.16) * Math.PI) : (A % 7.9 < 0.14 ? Math.sin(((A % 7.9) / 0.14) * Math.PI) : 0)); }   // 몇 초마다 눈을 깜빡인다
       me.updateMatrixWorld(true); myHead.getWorldPosition(headW);
 
       // 카메라: 지금 컷을 고른다. 컷이 바뀌는 순간에는 바로 건너뛰고 화면이 잠깐 어두워졌다 돌아온다(자연스러운 컷 전환)
@@ -233,7 +236,11 @@ export default function Bottle3D({ nickname = "", onDone }) {
       if (FOVS[shot.k] !== lastFov) { lastFov = FOVS[shot.k]; cam.fov = lastFov; cam.updateProjectionMatrix(); }
       cam.updateMatrixWorld(true);
       const fp = shot.k === "fp";
-      me.visible = !fp;                                                             // 1인칭에서는 내 몸이 보이지 않고 손만 보인다
+      me.visible = !fp && shot.k !== "pov";                                         // 1인칭·인물 시점에서는 내 몸이 보이지 않는다(눈 안에서 보면 머리와 가방이 화면을 가린다)
+      const near = fp || shot.k === "pov";
+      seaMat.roughness = near ? 0.9 : 0.3; if (foam0) foam0.visible = !near;               // 가까이서 내려다볼 때 바다의 반사와 거품 고리가 일그러져 보이지 않게
+      crests.forEach(({ m }) => { if (near) m.material.opacity = 0; });
+      windowLamp.intensity = near ? 0.5 : 2.4;                    // 물 위에 번쩍이는 창가 불빛의 반사가 화면을 덮지 않게
       const pickQ = smooth((T - AT.pickFrom) / (AT.pickTo - AT.pickFrom));
       fpRig.visible = fp; fpRig.position.y = -0.35 * (1 - pickQ);
       if (cutEl.current) { cutFlash = Math.max(0, cutFlash - dt * 3.2); cutEl.current.style.opacity = String(cutFlash); }

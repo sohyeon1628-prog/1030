@@ -94,7 +94,7 @@ export function makePostman({ elder = false } = {}) {
     ? { jacket: "#2f6b50", cap: "#24493a", brim: "#183a2d", band: "#f2d98a", scarf: "#f2c94c", badge: "#fff3b0", bag: "#7a5a3a" }
     : { jacket: "#4f7fb5", cap: "#d9452c", brim: "#b8341f", band: "#faf3e6", scarf: "#e8553a", badge: "#ffd166", bag: "#c98a4b" };
   const jacket = pal.jacket, skin = elder ? "#efc9a6" : "#f6d2b0", leather = pal.bag;
-  const arms = [], legs = [], wings = [];
+  const arms = [], legs = [], wings = [], eyes = [], feet = [], hands = [];
 
   // 몸통 + 스카프 + 허리띠
   body.add(mesh(new THREE.CapsuleGeometry(0.23, 0.32, 8, 16), jacket, 0, 0.1, 0));
@@ -109,8 +109,8 @@ export function makePostman({ elder = false } = {}) {
   head.add(box(0.3, 0.045, 0.42, 0.02, pal.brim, 0.3, 0.05, 0));
   const badge = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 16), pal.badge, 0.335, 0.2, 0); badge.rotation.z = Math.PI / 2; head.add(badge);
   [-1, 1].forEach((z) => {
-    head.add(mesh(new THREE.SphereGeometry(0.045, 12, 10), "#2b1d1a", 0.27, 0.0, z * 0.12));
-    head.add(mesh(new THREE.SphereGeometry(0.015, 8, 6), "#ffffff", 0.305, 0.02, z * 0.115));
+    const eye = mesh(new THREE.SphereGeometry(0.045, 12, 10), "#2b1d1a", 0.27, 0.0, z * 0.12), shine = mesh(new THREE.SphereGeometry(0.015, 8, 6), "#ffffff", 0.305, 0.02, z * 0.115);
+    head.add(eye, shine); eyes.push(eye, shine);
     const ch = mesh(new THREE.SphereGeometry(0.05, 10, 8), "#f4a58a", 0.24, -0.1, z * 0.2); ch.scale.set(0.5, 0.8, 1); head.add(ch);
     if (elder) head.add(mesh(new THREE.SphereGeometry(0.1, 12, 10), "#f1ece4", -0.06, -0.08, z * 0.28));
   });
@@ -129,12 +129,13 @@ export function makePostman({ elder = false } = {}) {
   [-1, 1].forEach((z) => {
     const ad = [0.955, 0.296], sh = [0.08, 0.3];
     const a = mesh(new THREE.CapsuleGeometry(0.075, 0.28, 6, 10), jacket, sh[0] + ad[0] * 0.22, sh[1] + ad[1] * 0.22, z * 0.27);
-    a.rotation.z = -(Math.PI / 2 - 0.3); body.add(a); arms.push({ m: a, base: a.rotation.z });
-    body.add(mesh(new THREE.SphereGeometry(0.095, 12, 10), "#faf3e6", sh[0] + ad[0] * 0.46, sh[1] + ad[1] * 0.46, z * 0.27));
+    a.rotation.z = -(Math.PI / 2 - 0.3); body.add(a);
+    const hand = mesh(new THREE.SphereGeometry(0.095, 12, 10), "#faf3e6", sh[0] + ad[0] * 0.46, sh[1] + ad[1] * 0.46, z * 0.27); body.add(hand); hands.push(hand);
+    arms.push({ m: a, base: a.rotation.z, hand, z, sh });
     const ld = [-0.92, -0.39], hip = [-0.02, -0.2];
     const l = mesh(new THREE.CapsuleGeometry(0.085, 0.3, 6, 10), z < 0 ? "#58392b" : "#6b4a3a", hip[0] + ld[0] * 0.24, hip[1] + ld[1] * 0.24, z * 0.12);
     l.rotation.z = Math.PI / 2 + 0.4; body.add(l); legs.push({ m: l, base: l.rotation.z });
-    body.add(mesh(new THREE.SphereGeometry(0.115, 12, 10), "#3d2a22", hip[0] + ld[0] * 0.5, hip[1] + ld[1] * 0.5, z * 0.12));
+    const foot = mesh(new THREE.SphereGeometry(0.115, 12, 10), "#3d2a22", hip[0] + ld[0] * 0.5, hip[1] + ld[1] * 0.5, z * 0.12); body.add(foot); feet.push(foot);
     const pivot = new THREE.Group(); pivot.position.set(-0.22, 0.42, z * 0.06);
     const wing = mesh(new THREE.SphereGeometry(1, 20, 12), "#ffffff", -0.1, 0.02, z * 0.3, { roughness: 0.9 });
     wing.scale.set(0.2, 0.035, 0.3); wing.rotation.y = z * 0.35; pivot.add(wing);
@@ -142,19 +143,38 @@ export function makePostman({ elder = false } = {}) {
     tip.scale.set(0.12, 0.03, 0.18); tip.rotation.y = z * 0.35; pivot.add(tip);
     body.add(pivot); wings.push({ pivot, s: z });
   });
-  g.userData.arms = arms; g.userData.legs = legs; g.userData.wings = wings;
+  g.userData.arms = arms; g.userData.legs = legs; g.userData.wings = wings; g.userData.eyes = eyes; g.userData.feet = feet; g.userData.hands = hands;
   g.scale.setScalar(0.78);
   return g;
 }
+
+// 땅에 서 있는 자세: 날 때는 다리가 뒤로 휘날리지만, 서 있을 때는 두 다리를 아래로 곧게 편다(animatePostman이 다리를 휘젓지 않게 base를 0으로 둔다).
+export function standStraight(pm) {
+  const u = pm.userData;
+  u.legs.forEach((l, k) => { l.base = 0; l.m.rotation.z = 0; l.m.position.set(-0.02, -0.435, l.m.position.z); u.feet[k].position.set(0.03, -0.66, l.m.position.z); });
+  u.straight = true;
+  u.arms.forEach((a) => { a.m.position.set(a.sh[0] - 0.02, a.sh[1] - 0.2, a.z * 0.3); a.m.rotation.set(a.z * 0.08, 0, 0); a.hand.position.set(a.sh[0] - 0.02, a.sh[1] - 0.42, a.z * 0.3); });
+}
+// 눈 깜빡임: 눈과 눈빛을 세로로 납작하게 눌렀다 편다. amount 0(뜸)~1(감음)
+export function blinkEyes(pm, amount) { pm.userData.eyes.forEach((e) => { e.scale.y = 1 - 0.9 * amount; }); }
 
 // 우체부의 날갯짓·팔다리 움직임. thrust(0~1)가 클수록 날개가 크게 퍼덕인다.
 export function animatePostman(pm, T, thrust = 0.6) {
   const u = pm.userData;
   const flap = Math.sin(T * 14) * (0.3 + 0.35 * thrust);
-  u.wings.forEach(({ pivot, s }) => { pivot.rotation.x = s * (0.45 + flap); });
-  u.legs.forEach((l, k) => { l.m.rotation.z = l.base + Math.sin(T * 9 + k * 2) * 0.18; });
-  u.arms.forEach((a, k) => { a.m.rotation.z = a.base + Math.sin(T * 6 + k) * 0.06; });
-  u.head.rotation.z = Math.sin(T * 3) * 0.04;
+  u.wings.forEach(({ pivot, s }) => { pivot.rotation.x = u.straight ? s * (0.12 + Math.sin(T * 1.3) * 0.035) : s * (0.45 + flap); });   // 서 있을 땐 날개를 접고 숨 쉬듯 아주 조금만
+  u.legs.forEach((l, k) => { l.m.rotation.z = u.straight ? 0 : l.base + Math.sin(T * 9 + k * 2) * 0.18; });
+  if (u.straight) {
+    u.arms.forEach((a, k) => {
+      const th = Math.sin(T * 1.1 + k * Math.PI) * 0.09 + Math.sin(T * 0.37 + k) * 0.03;           // 어깨를 축으로 느리게 앞뒤로(양팔이 엇갈린다)
+      const out = a.z * (0.09 + Math.sin(T * 1.5) * 0.015);                                          // 숨 쉬듯 팔이 살짝 벌어졌다 모인다
+      const cx = a.sh[0] - 0.02, cy = a.sh[1], d = 0.2, d2 = 0.42;
+      a.m.rotation.set(out, 0, th);
+      a.m.position.set(cx + Math.sin(th) * d, cy - Math.cos(th) * d, a.z * 0.3 + Math.sin(out) * 0.04);
+      a.hand.position.set(cx + Math.sin(th) * d2, cy - Math.cos(th) * d2, a.z * 0.3 + Math.sin(out) * 0.08);
+    });
+  } else u.arms.forEach((a, k) => { a.m.rotation.z = a.base + Math.sin(T * 6 + k) * 0.06; });
+  u.head.rotation.z = Math.sin(T * (u.straight ? 0.9 : 3)) * 0.04;
 }
 
 

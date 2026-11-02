@@ -80,7 +80,7 @@ export default function ReceiveScreen({ id }) {
 
         {phase === "open" && letter && (
           <>
-            <article className="paper opening" style={{ background: color }}>
+            <article className={`paper opening paper-${letter.paper}`} style={{ backgroundColor: color }}>
               <h2>{letter.to}에게</h2>
               <div className="route">{josa(letter.from, "이", "가")} 보낸 편지 · {fmt(letter.createdAt)}</div>
               {letter.body.split("\n").map((l, i) => <p key={i}>{l}</p>)}

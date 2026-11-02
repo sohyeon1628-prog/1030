@@ -19,7 +19,8 @@ const HAEMU_POS = new THREE.Vector3(3.6, 2.35, 12.6);
 const LAND_POS = new THREE.Vector3(POST_ISLAND.x + 0.55, 1.08, POST_ISLAND.z + 0.95);
 const LANDING = new THREE.CatmullRomCurve3([ME_POS, new THREE.Vector3(3.2, 3.7, 14.4), new THREE.Vector3(1.2, 2.6, 14.9), LAND_POS]);
 // 해무가 날아오는 길: 집에서 출발해 네 섬을 잇는 바람길을 따라 내려온다
-const FLIGHT = new THREE.CatmullRomCurve3([HOME_POST, new THREE.Vector3(6.5, 3.2, 1.5), new THREE.Vector3(2.5, 3.4, 6.5), new THREE.Vector3(9, 3.2, 8.5), new THREE.Vector3(6.6, 3.0, 12.4), HAEMU_POS]);
+// 해무는 섬을 따라 돌지 않고, 자기 집에서 내게로 섬들 위를 가로질러 곧게 날아온다(위에서 보면 직선, 도중에 섬 지붕을 넘도록 가운데만 살짝 높다)
+const FLIGHT = new THREE.CatmullRomCurve3([HOME_POST, HOME_POST.clone().lerp(HAEMU_POS, 0.5).setY(3.7), HAEMU_POS], false, "centripetal");
 
 // 카메라 키프레임: [시각, 위치, 바라보는 곳]. 시각은 대본(buildEpilogueScript)의 기준 시각(at)에서 정해진다.
 // 날아오는 동안에는 해무를 따라가고(아래 follow), 그 뒤에는 말하는 사람을 번갈아 비춘다.
@@ -139,8 +140,8 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
     const ro = new ResizeObserver(resize); ro.observe(el);
 
     const orbit = (A) => {                                    // 해무 곁을 도는 편지의 자리
-      const a = A * 0.8;
-      return new THREE.Vector3(HAEMU_POS.x + Math.cos(a) * 1.1, HAEMU_POS.y + 0.7 + Math.sin(A * 2) * 0.1, HAEMU_POS.z + Math.sin(a) * 1.1);
+      const a = A * 0.28;                                  // 천천히 한 바퀴를 돈다(예전엔 너무 빨랐다)
+      return new THREE.Vector3(HAEMU_POS.x + Math.cos(a) * 1.1, HAEMU_POS.y + 0.7 + Math.sin(A * 1.1) * 0.08, HAEMU_POS.z + Math.sin(a) * 1.1);
     };
     const chest = new THREE.Vector3(HAEMU_POS.x + 0.2, HAEMU_POS.y + 0.25, HAEMU_POS.z + 0.1);
     const bag = new THREE.Vector3(ME_POS.x - 0.2, ME_POS.y + 0.3, ME_POS.z);       // 내 가방 위치(편지가 올라오는 곳)
@@ -221,11 +222,11 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
       else if (T < AT.tuckT) {
         const q = smooth((T - AT.envT) / 2.5);
         tmp.copy(bag).lerp(orbit(A), q); tmp.y += Math.sin(q * Math.PI) * 1.1;
-        old.position.copy(tmp); old.rotation.set(0, A * 1.2, Math.sin(A * 1.5) * 0.1);
+        old.position.copy(tmp); old.rotation.set(0, A * 0.45, Math.sin(A * 0.9) * 0.08);
         old.scale.setScalar(Math.max(0.001, backOut((T - AT.envT) / 1.2) * 1.25));
       } else {
         const q = smooth((T - AT.tuckT) / 1.4);
-        tmp.copy(orbit(A)).lerp(chest, q); old.position.copy(tmp); old.rotation.set(0, A * 1.2 * (1 - q), 0);
+        tmp.copy(orbit(A)).lerp(chest, q); old.position.copy(tmp); old.rotation.set(0, A * 0.45 * (1 - q), 0);
         old.scale.setScalar(Math.max(0.001, 1.25 * (1 - q)));
       }
 

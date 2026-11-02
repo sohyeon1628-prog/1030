@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { W, H } from "../game/constants.js";
 import { createFlight, stepFlight, computeGrade, orbsCollected } from "../game/engine.js";
 import { drawFlight } from "../game/render.js";
+import { warmSprites } from "../game/sprites3d.js";
 import { audioStart, audioStop, audioUpdate, fx } from "../game/audio.js";
 import Icon from "./Icon.jsx";
 
@@ -12,9 +13,11 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
   const movesRef = useRef([]);          // 줄 옮기기 입력 대기열(+1 위, -1 아래)
   const pausedRef = useRef(false);
   const startRef = useRef(null);        // 포인터를 누른 위치(스와이프 판별)
+  const braceRef = useRef(0);           // 비바람 버티기: Enter(또는 버튼)를 누른 횟수
+  const [braceOn, setBraceOn] = useState(false);
   const [paused, setPaused] = useState(false);
 
-  const setPause = (v) => { pausedRef.current = v; movesRef.current.length = 0; setPaused(v); };
+  const setPause = (v) => { pausedRef.current = v; movesRef.current.length = 0; braceRef.current = 0; setPaused(v); };
   const move = (d) => { if (!pausedRef.current) movesRef.current.push(d); };
 
   useEffect(() => {
@@ -31,8 +34,9 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
     };
     fit();
     addEventListener("resize", fit);
+    try { warmSprites(); } catch { /* WebGL이 없으면 2D 그림으로 */ }
     const F = createFlight(letter, tutorialSeen, practice);
-    let raf, last = performance.now(), seenMarked = false;
+    let raf, last = performance.now(), seenMarked = false, braceShown = false;
     audioStart();
 
     const loop = (now) => {
@@ -41,6 +45,8 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
       if (!pausedRef.current) {
         F.viewW = cvs.width;
         while (movesRef.current.length) F.moves.push(movesRef.current.shift());
+        F.braceTaps += braceRef.current; braceRef.current = 0;
+        if (F.brace.on !== braceShown) { braceShown = F.brace.on; setBraceOn(braceShown); }
         stepFlight(F, dt, fx);
         audioUpdate(F.thrust);
         if (!seenMarked && F.mode === "fly" && !practice) { seenMarked = true; onTutorialSeen(); }
@@ -59,6 +65,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
       if (e.repeat) return;
       if (e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Space") { move(1); e.preventDefault(); }
       else if (e.code === "ArrowDown" || e.code === "KeyS") { move(-1); e.preventDefault(); }
+      else if (e.code === "Enter" || e.code === "NumpadEnter") { if (!pausedRef.current) braceRef.current++; e.preventDefault(); }   // 비바람 버티기
       else if (e.code === "Escape") setPause(!pausedRef.current);
     };
     const blur = () => setPause(true);
@@ -92,6 +99,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
         <button className="lane-btn" aria-label="위로 한 줄" onPointerDown={(e) => { stop(e); move(1); }}><Icon name="up" size={28} /></button>
         <button className="lane-btn" aria-label="아래로 한 줄" onPointerDown={(e) => { stop(e); move(-1); }}><Icon name="down" size={28} /></button>
       </div>
+      {braceOn && <button className="brace-btn" onPointerDown={(e) => { stop(e); braceRef.current++; }} onPointerUp={stop} aria-label="버티기">버티기<small>Enter</small></button>}
       <button className="pause-btn" onPointerDown={stop} onPointerUp={stop} onClick={() => setPause(true)} aria-label="일시정지">Ⅱ</button>
       {paused && (
         <div className="overlay" onPointerDown={stop} onPointerUp={stop}>

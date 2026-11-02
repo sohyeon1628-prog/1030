@@ -21,3 +21,16 @@ export const INV = 1.2;         // 맞은 뒤 무적 시간(초)
 export const JUMP_T = 1.7;      // 상어·고래가 물 밖에 있는 시간(초)
 export const JUMP_SPAN = 190;   // 뛰어오른 자리에서 정점까지의 가로 거리(px). 둥근 호를 그리며 왼쪽으로 넘어간다
 export const COMBO_SHIELD = 8;  // 연속으로 이만큼 피하면 깃털 방패를 하나 준다
+
+// 하늘길 걷기(3장부터): 날다가 구름 길에 내려 걷는 구간. ↑로 폴짝 뛰어 구름 덩어리와 구멍을 넘는다.
+export const WALK_TOP = 190;               // 구름 길 윗면 높이
+export const WALK_Y = WALK_TOP + FOOT;     // 길 위에 서 있을 때 몸통 중심 높이
+export const WALK_JUMP = 125;              // 뛰어오르는 높이
+export const WALK_JUMP_T = 0.72;           // 한 번 뛰어서 내려오기까지(초)
+// 도착 지점 2초 전부터는 장애물이 나오지 않는다(착륙 전 마지막 2초, 최고 속도 기준 거리)
+export const LAND_P = 0.95;
+export const CALM_DIST = 2 * VX_MAX;
+
+// 아이템 지속 시간(초): 깃털 방패와 우산은 얻은 뒤 이만큼 지나면 사라진다
+export const GUARD_T = 12;
+export const UMBRELLA_T = 10;

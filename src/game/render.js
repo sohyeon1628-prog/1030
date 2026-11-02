@@ -1,5 +1,7 @@
+import { WALK_TOP, WALK_Y } from "./constants.js";
 import { H, SX, LEN, ISLAND, LANE_Y, MAX_HITS, JUMP_T, JUMP_SPAN, START_TOP, GRASS, FOOT } from "./constants.js";
 import { lerp, clamp } from "./level.js";
+import { getSprite } from "./sprites3d.js";
 
 // 참고 이미지 팔레트: 석양빛 오렌지 + 크림 + 올리브 그린 + 포인트(빨강/민트/하늘)
 export const C = {
@@ -107,10 +109,11 @@ function island(ctx, x, top, w, opts = {}) {
 function postman(ctx, F, sy) {
   const thrust = F.thrust;
   // 섬 위에 서 있을 때(stand=1): 똑바로 서서 다리를 아래로, 날개는 접은 채 이륙이 다가올수록 들썩인다. 발을 떼면 금방 비행 자세로.
-  const stand = Math.max(clamp(1 - F.lift * 3, 0, 1), F.land);                      // 착륙하면 다시 서 있는 자세로
+  const stand = Math.max(clamp(1 - F.lift * 3, 0, 1), F.land, F.walkK);             // 착륙하면, 하늘길을 걸을 때도 서 있는 자세로
   const ready = F.mode === "count" ? clamp(1 - F.cd / 2, 0, 1) : 1;
   const flap = Math.sin(F.t * (14 - 6 * stand)) * (0.2 + 0.4 * thrust) * (1 - stand * (1 - 0.6 * ready));
-  const swing = Math.sin(F.t * (9 + 9 * stand)) * (F.lift > 0 && F.lift < 0.25 ? 0.6 : 0.18 * (1 - stand));   // 도움닫기 중엔 다리를 크게 휘젓는다
+  const walkSwing = F.walkK > 0.5 ? (F.jumpT > 0 ? 0.4 : Math.sin(F.t * 12) * 0.55) : null;                   // 하늘길: 걷는 다리, 뛰는 중엔 접는다
+  const swing = walkSwing ?? Math.sin(F.t * (9 + 9 * stand)) * (F.lift > 0 && F.lift < 0.25 ? 0.6 : 0.18 * (1 - stand));   // 도움닫기 중엔 다리를 크게 휘젓는다
   const crouch = F.mode === "count" && F.cd < 0.35 && stand ? 0.1 : 0;                                // 뛰기 직전 몸을 웅크린다
   const jacket = F.rev > 0 ? "#a63a28" : "#4f7fb5", jacketLt = F.rev > 0 ? "#c4503a" : "#6f9bd0";
   const skin = "#f6d2b0", pants = "#6b4a3a", boot = "#3d2a22", leather = "#c98a4b", leatherDk = "#a56d33";
@@ -199,6 +202,8 @@ function splash(ctx, x, y, t) {                                  // 물보라
 
 // 호를 그리며 뛰어오르는 상어/고래: 원점이 몸통 중심, 머리가 +x를 본다. 그리는 쪽에서 진행 방향으로 돌린다.
 function jumper(ctx, kind, t) {
+  const sp = getSprite(kind, t * 9 / (Math.PI * 2));                           // 3D 스프라이트(몸통 중심이 원점, 머리가 +x)
+  if (sp) { ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h); return; }
   const whale = kind === "whale";
   const [L, T] = whale ? [124, 44] : [100, 34];
   const [c0, c1] = whale ? ["#5b8bc2", "#3f6ea5"] : ["#8ea4ba", "#6c8299"];
@@ -243,6 +248,8 @@ function jumper(ctx, kind, t) {
 
 const BIRD = { blue: ["#7b93ab", "#56708a", "#6b86a0"], dark: ["#4a4657", "#2e2b38", "#3b3847"] };   // 검은 새 떼는 도중에 줄을 바꾼다
 function bird(ctx, x, y, s, t, dir = -1, tone = "blue") {       // 날갯짓하는 새(기본 오른쪽, dir=-1이면 왼쪽을 본다)
+  const sp = getSprite(`bird:${tone}`, t * 10 / (Math.PI * 2));
+  if (sp) { ctx.save(); ctx.translate(x, y); ctx.scale(dir * s, s); ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h); ctx.restore(); return; }
   const f = Math.sin(t * 10) * 0.8, [c1, c2, body] = BIRD[tone];
   ctx.save(); ctx.translate(x, y); ctx.scale(dir * s, s);
   for (const [a, col] of [[-0.3, c1], [0, c2]]) {
@@ -258,6 +265,8 @@ function bird(ctx, x, y, s, t, dir = -1, tone = "blue") {       // 날갯짓하�
 }
 
 function plane(ctx, x, y, s, dir = 1, angle = 0) {              // 작은 비행기(기본 오른쪽을 본다)
+  const sp = getSprite("plane", (performance.now() / 160) % 1);
+  if (sp) { ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.scale(dir * s, s); ctx.drawImage(sp.img, -sp.w / 2, -sp.h / 2, sp.w, sp.h); ctx.restore(); return; }
   ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.scale(dir * s, s);
   ctx.fillStyle = "#d9e2ea"; path(ctx, () => { ctx.moveTo(-8, -3); ctx.lineTo(-30, -16); ctx.lineTo(-22, -16); ctx.lineTo(0, -3); }); ctx.fill();   // 꼬리날개
   rr(ctx, -32, -7, 64, 14, 7, vg(ctx, -7, 14, "#ffffff", "#dfe7ee"));                                                                        // 동체
@@ -269,6 +278,8 @@ function plane(ctx, x, y, s, dir = 1, angle = 0) {              // 작은 비행
 }
 
 function tornado(ctx, x, y, r, t) {                              // 회오리: 위가 넓고 아래가 좁은 깔때기
+  const sp = getSprite("tornado", t * 0.8);
+  if (sp) { const k = r / 55; ctx.drawImage(sp.img, x - (sp.w * k) / 2, y - 0.45 * r - (sp.h * k) / 2, sp.w * k, sp.h * k); return; }
   const top = y - r * 1.9, bot = y + r * 1.0;
   for (let i = 0; i < 9; i++) {
     const u = i / 8, yy = top + (bot - top) * u, w = r * (1.1 - 0.85 * u);
@@ -276,6 +287,13 @@ function tornado(ctx, x, y, r, t) {                              // 회오리: �
     path(ctx, () => ctx.ellipse(x + Math.sin(t * 4 + i * 0.9) * r * 0.12 * (1 - u * 0.3), yy, w, r * 0.16, 0, 0, Math.PI * 2)); ctx.fill();
   }
   for (let k = 0; k < 10; k++) { const a = t * 5 + k * 0.9; blob(ctx, x + Math.cos(a) * r * (0.5 + 0.3 * Math.sin(k)), y + (k - 5) * r * 0.28, 2.4, "#8a6a4a"); }
+}
+
+// 먹구름: 3D 스프라이트(없으면 2D 구름)
+function stormCloud(ctx, x, y, s) {
+  const sp = getSprite("storm");
+  if (sp) { ctx.drawImage(sp.img, x - (sp.w * s) / 2, y - (sp.h * s) / 2, sp.w * s, sp.h * s); return; }
+  puffCloud(ctx, x, y, s, "#6f7d8f", "#56627a", 0.8);
 }
 
 function boltShape(ctx, x, top, bot, seed) {
@@ -333,7 +351,7 @@ function practiceLabels(ctx, F, camX, sy, seaY) {
   for (const it of F.lv.items) {
     if (it.taken) continue;
     const x = it.x - camX; if (x < -40 || x > W + 40) continue;
-    tag(ITEM_NAME[it.kind], x, sy(LANE_Y[it.lane]) + 40);
+    tag(ITEM_NAME[it.kind], x, sy(it.y ?? LANE_Y[it.lane]) + 40);
   }
   for (const c of F.lv.clouds) { const x = c.x - camX; if (x > -90 && x < W + 90) tag("먹구름: 닿으면 아파요", x, sy(c.y) + 52); }
   for (const v of F.lv.vortices) { const x = v.x - camX; if (x > -100 && x < W + 100) tag("회오리: 위아래 반대", x, sy(v.y) + v.r + 20); }
@@ -354,6 +372,36 @@ function practiceLabels(ctx, F, camX, sy, seaY) {
   ctx.restore();
 }
 
+// 하늘길: 구름으로 이어진 길. 구멍 자리는 끊겨 있고, 낮은 먹구름 덩어리가 놓여 있다.
+function skyRoad(ctx, F, camX, sy, W) {
+  const w = F.lv.walk; if (!w) return;
+  const a = w.a - 220 - camX, b = w.b + 160 - camX;
+  if (b < -60 || a > W + 60) return;
+  const top = sy(WALK_TOP);
+  const gaps = w.obs.filter((o) => o.kind === "gap").map((o) => [o.x - o.w / 2 - camX, o.x + o.w / 2 - camX]).sort((p, q) => p[0] - q[0]);
+  const segs = []; let s = a;
+  for (const [g0, g1] of gaps) { if (g0 > s) segs.push([s, g0]); s = Math.max(s, g1); }
+  segs.push([s, b]);
+  for (const [s0, e0] of segs) {
+    const x0 = Math.max(s0, -50), x1 = Math.min(e0, W + 50);
+    if (x1 <= x0) continue;
+    const gr = ctx.createLinearGradient(0, top, 0, top + 52); gr.addColorStop(0, "#ffffff"); gr.addColorStop(1, "#cfe6f4");
+    rr(ctx, x0, top + 6, x1 - x0, 44, 20, gr);
+    for (let x = Math.ceil((x0 + 8) / 30) * 30; x < x1 - 8; x += 30) blob(ctx, x, top + 8 + Math.sin(x * 0.07) * 2, 17 + ((x / 30) % 3) * 3, "#ffffff");   // 길 윗면의 둥근 구름 결
+  }
+  for (const [g0, g1] of gaps) {                                              // 구멍 가장자리의 흩날리는 구름 조각
+    if (g1 < -20 || g0 > W + 20) continue;
+    ctx.save(); ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    for (const gx of [g0 - 6, g1 + 6]) { path(ctx, () => { ctx.moveTo(gx, top + 14); ctx.lineTo(gx + (gx === g0 - 6 ? -4 : 4), top + 40); }); ctx.stroke(); }
+    ctx.restore();
+  }
+  for (const o of w.obs) {                                                     // 낮은 먹구름 덩어리
+    if (o.kind !== "puff") continue;
+    const x = o.x - camX; if (x < -70 || x > W + 70) continue;
+    stormCloud(ctx, x, sy(WALK_TOP + o.h * 0.5) + 2, 1.15);
+  }
+}
+
 export function drawFlight(ctx, F) {
   const W = ctx.canvas.width;
   const camX = F.x - SX;
@@ -369,11 +417,7 @@ export function drawFlight(ctx, F) {
   sun.addColorStop(0, "rgba(255,244,200,.85)"); sun.addColorStop(1, "rgba(255,244,200,0)");
   ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
 
-  for (let i = 0; i < 6; i++) {
-    const span = W + 300;
-    const x = (((i * 230 - camX * 0.14 - F.t * 5) % span) + span) % span - 150;
-    puffCloud(ctx, x, 90 + (i % 3) * 75 + i * 10, 1 + (i % 2) * 0.35, "#ffffff", "#cfe9f5", 2);
-  }
+  // 배경에는 구름을 두지 않는다: 길·장애물(먹구름)과 헷갈리지 않도록 하늘만 보인다
 
   island(ctx, -camX - 140, START_TOP, 340, { arch: 0, cactus: [[310, 1.1]], bushes: [[24, 1]] });
   island(ctx, 0.9 * LEN - camX, ISLAND, 0.1 * LEN + 560, {
@@ -381,18 +425,26 @@ export function drawFlight(ctx, F) {
     houses: [[260, 58, 42], [350, 50, 36]], roof: C.teal,
   });
 
-  // 바다: 섬의 아랫부분이 물속에 잠기고, 수면에는 흰 물결이 일렁인다
+  // 바다: 섬의 아랫부분이 물속에 잠기고, 겹겹의 물결이 서로 다른 빠르기로 일렁인다(멀수록 느리고 옅다). 수면(seaY)은 상어·고래가 뛰어오르는 기준이다.
   const seaY = H - 24;
-  const sg = ctx.createLinearGradient(0, seaY, 0, H);
-  sg.addColorStop(0, "rgba(79,179,217,.82)"); sg.addColorStop(1, "rgba(38,130,182,.96)");
-  ctx.fillStyle = sg; ctx.fillRect(-10, seaY, W + 20, 40);
-  ctx.fillStyle = "rgba(255,255,255,.6)";
-  path(ctx, () => {
-    ctx.moveTo(-10, seaY + 2);
-    for (let x = -10; x <= W + 10; x += 10) ctx.lineTo(x, seaY + Math.sin((x + camX * 0.6 + F.t * 40) * 0.05) * 3);
-    for (let x = W + 10; x >= -10; x -= 10) ctx.lineTo(x, seaY + 6 + Math.sin((x + camX * 0.6 + F.t * 40) * 0.05) * 3);
+  const WAVES = [
+    { y: -2, amp: 5, f: 0.017, sp: 0.9, k: 0.45, col: "rgba(150,214,238,.75)" },
+    { y: 5, amp: 6, f: 0.026, sp: 1.5, k: 0.7, col: "rgba(82,181,222,.9)" },
+    { y: 13, amp: 5, f: 0.036, sp: 2.2, k: 1.0, col: "rgba(48,146,198,.96)" },
+    { y: 22, amp: 4, f: 0.05, sp: 2.9, k: 1.3, col: "rgba(34,122,178,1)" },
+  ];
+  WAVES.forEach((w, n) => {
+    const yy = (x) => seaY + w.y + Math.sin((x + camX * w.k) * w.f + F.t * w.sp + n) * w.amp + Math.sin((x + camX * w.k) * w.f * 2.3 - F.t * w.sp * 0.7) * w.amp * 0.35;
+    path(ctx, () => { ctx.moveTo(-10, H + 10); for (let x = -10; x <= W + 10; x += 8) ctx.lineTo(x, yy(x)); ctx.lineTo(W + 10, H + 10); });
+    ctx.fillStyle = w.col; ctx.fill();
+    if (n === 1 || n === 2) {                                           // 물마루의 흰 거품
+      ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${n === 1 ? 0.55 : 0.8})`; ctx.lineWidth = 2.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      path(ctx, () => { for (let x = -10; x <= W + 10; x += 8) { const y = yy(x); x === -10 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); } }); ctx.stroke();
+      ctx.restore();
+    }
   });
-  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,.55)";                              // 반짝이는 물비늘
+  for (let i = 0; i < 9; i++) { const x = (((i * 137 - camX * 1.1 + F.t * 18) % (W + 80)) + W + 80) % (W + 80) - 40; const y = seaY + 8 + ((i * 53) % 18) + Math.sin(F.t * 2 + i) * 2; rr(ctx, x, y, 12 + (i % 3) * 6, 2.5, 1.2, "rgba(255,255,255,.55)"); }
 
   // 세 줄 안내선: 위·가운데·아래 줄이 어디인지 옅은 점선으로 보인다
   if (F.mode !== "done") {
@@ -400,6 +452,8 @@ export function drawFlight(ctx, F) {
     for (const ly of LANE_Y) path(ctx, () => { ctx.moveTo(0, sy(ly)); ctx.lineTo(W, sy(ly)); }), ctx.stroke();
     ctx.restore();
   }
+
+  skyRoad(ctx, F, camX, sy, W);
 
   // 갑자기 일어나는 사건: 경고 → 발생
   const lane = (F.mode === "fly") ? 1 : 0;
@@ -471,14 +525,14 @@ export function drawFlight(ctx, F) {
     if (it.taken) continue;
     const x = it.x - camX;
     if (x < -40 || x > W + 40) continue;
-    drawItem(ctx, it.kind, x, sy(LANE_Y[it.lane]), F.t);
+    drawItem(ctx, it.kind, x, sy(it.y ?? LANE_Y[it.lane]), F.t);
   }
 
   // 장애물 3) 먹구름(가끔 번쩍인다), 번개, 회오리
   for (const c of F.lv.clouds) {
     const x = c.x - camX;
     if (x < -90 || x > W + 90) continue;
-    puffCloud(ctx, x, sy(c.y) + 4, c.r / 34, "#6f7d8f", "#56627a", 0.8);
+    stormCloud(ctx, x, sy(c.y) + 4, c.r / 34);
     if (Math.sin(F.t * 2.7 + c.x * 0.01) > 0.93) { ctx.globalAlpha = 0.55; puffCloud(ctx, x, sy(c.y) + 4, c.r / 34, "#fff7c9", "#fff7c9", 2); ctx.globalAlpha = 1; }
   }
   for (const b of F.lv.bolts) {
@@ -541,7 +595,7 @@ export function drawFlight(ctx, F) {
   }
 
   // 우체부 그림자
-  const groundY = F.x >= 0.9 * LEN ? ISLAND + GRASS : F.x < 200 ? START_TOP + GRASS : 0;   // 섬 위에서는 잔디 표면에 그림자
+  const groundY = F.walkK > 0.3 ? WALK_TOP : F.x >= 0.9 * LEN ? ISLAND + GRASS : F.x < 200 ? START_TOP + GRASS : 0;   // 섬 위에서는 잔디 표면에, 하늘길에서는 구름 길 위에 그림자
   const alt = clamp((F.y - groundY) / 400, 0, 1);
   ctx.save();
   ctx.filter = "blur(4px)";
@@ -559,7 +613,8 @@ export function drawFlight(ctx, F) {
   }
   // 깃털 방패: 몸 주위에 투명한 방울(개수만큼 겹)
   for (let i = 0; i < F.guard; i++) {
-    ctx.save(); ctx.strokeStyle = `rgba(255,255,255,${0.9 - i * 0.25})`; ctx.fillStyle = "rgba(190,225,245,.22)"; ctx.lineWidth = 3;
+    ctx.save(); ctx.globalAlpha = F.guardT < 3 && Math.floor(F.t * 8) % 2 ? 0.3 : 1;                  // 사라지기 3초 전부터 깜빡인다
+    ctx.strokeStyle = `rgba(255,255,255,${0.9 - i * 0.25})`; ctx.fillStyle = "rgba(190,225,245,.22)"; ctx.lineWidth = 3;
     path(ctx, () => ctx.arc(SX, sy(F.y) - 6, 40 + i * 7, 0, Math.PI * 2)); ctx.fill(); ctx.stroke(); ctx.restore();
   }
   if (F.hitMark > 0) {                                                              // 연습: 맞은 자리를 붉은 파동과 글자로 짚는다
@@ -568,7 +623,7 @@ export function drawFlight(ctx, F) {
     path(ctx, () => ctx.arc(SX, sy(F.y) - 4, 22 + k * 60, 0, Math.PI * 2)); ctx.stroke();
     ctx.globalAlpha = 1 - k * 0.6; ctx.font = `22px ${SANS}`; ctx.textAlign = "center"; outlined(ctx, "맞았어요!  ♥ -1", SX, sy(F.y) - 64 - k * 18); ctx.restore();
   }
-  if (F.umbrella > 0) drawItem(ctx, "umbrella", SX + 4, sy(F.y) - 64, F.t);         // 머리 위의 우산
+  if (F.umbrella > 0 && !(F.umbrella < 3 && Math.floor(F.t * 8) % 2)) drawItem(ctx, "umbrella", SX + 4, sy(F.y) - 64, F.t);   // 사라지기 3초 전부터 깜빡인다         // 머리 위의 우산
   if (F.pop) {                                                                      // 아이템을 얻는 순간: 둥근 파동
     const k = 1 - F.pop.t / 0.6;
     ctx.save(); ctx.strokeStyle = F.pop.kind === "orb" ? "rgba(255,214,102,.9)" : "rgba(255,255,255,.9)"; ctx.lineWidth = 4 * (1 - k) + 1; ctx.globalAlpha = 1 - k;
@@ -610,6 +665,20 @@ export function drawFlight(ctx, F) {
     ctx.restore();
   }
 
+  if (F.brace.on) {                                                                 // 비바람 버티기 게이지: 몸 둘레 고리 + 위쪽 막대
+    const g = F.brace.g, low = g < 0.3, col = g > 0.55 ? "#5ec9a7" : g > 0.3 ? "#f1a24a" : "#d9452c";
+    ctx.save(); ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(31,74,99,.22)"; ctx.lineWidth = 7;
+    path(ctx, () => ctx.arc(SX, sy(F.y) - 4, 50, -Math.PI / 2, Math.PI * 1.5)); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = low ? 8 + Math.sin(F.t * 24) * 2 : 7;
+    path(ctx, () => ctx.arc(SX, sy(F.y) - 4, 50, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * g)); ctx.stroke();
+    rr(ctx, W / 2 - 150, 150, 300, 14, 7, "rgba(31,74,99,.2)");
+    rr(ctx, W / 2 - 150, 150, Math.max(8, 300 * g), 14, 7, col);
+    ctx.font = `22px ${SANS}`; ctx.textAlign = "center";
+    outlined(ctx, low ? "Enter 연타! 연타!" : "Enter를 연달아 눌러 버텨요", W / 2, 188);
+    ctx.restore();
+  }
+
   ctx.restore();
 
   const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.78);
@@ -642,7 +711,7 @@ export function drawFlight(ctx, F) {
     }
   }
   if (F.mode === "fly" && F.windState === "warn") {
-    ctx.font = `22px ${SANS}`; outlined(ctx, "바람이 몰려온다!", W / 2, 180);
+    ctx.font = `22px ${SANS}`; outlined(ctx, "비바람이 몰려온다! Enter 준비", W / 2, 180);
   }
   if (F.msgT > 0) {
     ctx.font = `24px ${SANS}`;
