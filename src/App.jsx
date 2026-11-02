@@ -273,7 +273,7 @@ export default function App() {
 
       {screen === "write" && <WriteScreen myName={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
       {screen === "mailbox" && <MailboxScreen focusId={focusId} onDeleteVoice={(m) => { deleteVoice(m.id); patchMine(m.id, { hasVoice: false }); }} onRetry={(m) => upload(m).then((r) => { if (r.status === "error") window.alert("아직 서버에 닿지 못했어요."); })} onPatch={patchMine} orbsTotal={orbsTotal} mine={state.mine} grades={state.grade} onBack={() => { setFocusId(null); setScreen("map"); }} />}
-      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} account={account} sync={sync} onAccount={() => setScreen("account")} onNick={() => { setNickFrom(true); setScreen("nickname"); }} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
+      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} account={account} sync={sync} onAccount={() => setScreen("account")} onNick={() => { setNickFrom(true); setScreen("nickname"); }} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} onSkipToWrite={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
 
       {screen === "read" && letter && (
         <main className="screen center">

@@ -770,3 +770,5 @@ textarea, input { font-size: max(16px, 1em); }
 /* 휴대폰: 글쓰기 화면의 조상에 걸린 선택 금지·변환·애니메이션이 키보드 열림을 막지 않게 한다 */
 .wt-stage, .wt-tilt, .wt-paper { -webkit-user-select: text; user-select: text; }
 @media (pointer: coarse) { .app > .screen { animation: none; } .wt-paper::after { pointer-events: none; } .paper.paper-gold::before { pointer-events: none; } }
+.nb-skip { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 16px 0 4px; text-align: center; }
+.nb-skip small { color: var(--dim); font: 13px var(--sans); }

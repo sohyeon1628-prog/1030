@@ -4,7 +4,7 @@ import { HAEMU_LETTER } from "../data/chapters.js";
 
 // 이야기 노트: 해무의 가방에 남아 있던 편지들을 봉투로 보여 준다. 봉투를 누르면 덮개가 열리며 편지지가 펼쳐진다.
 // 아직 열리지 않은 장은 봉인된 채 가려 둔다(스포일러 방지). 네 통을 모두 전하면 가방 맨 밑 주머니의 해무 편지도 여기에 남는다.
-export default function NoteScreen({ letters, grades, isUnlocked, storyDone, onBack, onReplay, onReplayEpilogue, bottleSeen, onReplayBottle, nickname, account, sync, onAccount, onNick }) {
+export default function NoteScreen({ letters, grades, isUnlocked, storyDone, onBack, onReplay, onReplayEpilogue, bottleSeen, onReplayBottle, onSkipToWrite, nickname, account, sync, onAccount, onNick }) {
   const firstOpen = (letters.find((l, i) => isUnlocked(i) && !grades[l.id]) || letters[0]).id;
   const [openId, setOpenId] = useState(firstOpen);
   const toggle = (id) => setOpenId((cur) => (cur === id ? null : id));
@@ -89,6 +89,12 @@ export default function NoteScreen({ letters, grades, isUnlocked, storyDone, onB
             : onNick && <button className="btn ghost" onClick={onNick}>로그인·가입</button>}
           <button className="btn ghost" onClick={onBack}>지도로</button>
         </div>
+        {!storyDone && onSkipToWrite && (
+          <div className="nb-skip">
+            <button className="btn" onClick={onSkipToWrite}>퀘스트 건너뛰고 편지 쓰기</button>
+            <small>이야기를 건너뛰고 바로 에필로그로 가요.</small>
+          </div>
+        )}
         <p className="nb-sync">{account?.nick ? (sync === "saving" ? "진행을 서버에 보관하는 중…" : sync === "offline" ? "서버에 닿지 못했어요. 이 기기에는 저장되어 있고, 연결되면 다시 보관해요." : "진행과 편지함이 계정에 보관되어 있어요.") : "이 기기에서만 저장돼요. 로그인하면 기기를 바꿔도 이어서 할 수 있어요."}</p>
       </div>
     </main>
