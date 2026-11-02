@@ -5,6 +5,7 @@ import { drawFlight } from "../game/render.js";
 import { warmSprites } from "../game/sprites3d.js";
 import { audioStart, audioStop, audioUpdate, fx } from "../game/audio.js";
 import Icon from "./Icon.jsx";
+import { VolumeControls } from "./VolumePanel.jsx";
 
 // 비행 단계: 높이를 위·가운데·아래 세 줄 중에서 한 줄씩 옮겨 날아간다.
 // 키보드 ↑↓(W/S, 스페이스는 위로) · 화면 위/아래 탭 · 위/아래 스와이프 · 화면 오른쪽의 ▲▼ 버튼.
@@ -105,6 +106,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
         <div className="overlay" onPointerDown={stop} onPointerUp={stop}>
           <div className="panel">
             <h2>잠시 멈춤</h2>
+            <VolumeControls />
             <button className="btn" onClick={() => setPause(false)}>이어서 날기</button>
             {practice && <button className="btn ghost" onClick={() => onFinish({ skipped: true })}>연습 마치고 진짜 편지로</button>}
             <button className="btn ghost" onClick={onExit}>지도로 돌아가기</button>

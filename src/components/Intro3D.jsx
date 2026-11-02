@@ -42,6 +42,7 @@ const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff
 const DUSK = { sky: new THREE.Color("#f6b48c"), hemiSky: new THREE.Color("#ffd2a8"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffdcb8") };
 
 import SpeedButton from "./SpeedButton.jsx";
+import SoundButton from "./VolumePanel.jsx";
 import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Intro3D({ nickname = "", onDone }) {
@@ -263,6 +264,7 @@ export default function Intro3D({ nickname = "", onDone }) {
     <div className="intro" ref={wrap} onPointerDown={advance}>
       <div className="letterbox top" /><div className="letterbox bottom" />
       <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+      <SoundButton className="intro-sound" />
       <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
       <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={done}>건너뛰기</button>
       {title && <h1 className="intro-title fade">나루 우체국</h1>}

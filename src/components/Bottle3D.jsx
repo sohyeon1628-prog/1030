@@ -51,6 +51,7 @@ function scribbleTexture() {
 }
 
 import SpeedButton from "./SpeedButton.jsx";
+import SoundButton from "./VolumePanel.jsx";
 import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Bottle3D({ nickname = "", onDone }) {
@@ -332,6 +333,7 @@ export default function Bottle3D({ nickname = "", onDone }) {
         <>
           <div className="letterbox top" /><div className="letterbox bottom" />
           <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+          <SoundButton className="intro-sound" />
           <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
           <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={skip}>건너뛰기</button>
           {cap && <p key={idx} className="intro-cap narr fade" aria-live="polite">{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p>}

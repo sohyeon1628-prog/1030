@@ -1,4 +1,5 @@
 import { isMuted } from "../game/audio.js";
+import { getVolume, onVolume } from "../volume.js";
 
 // 파티 편지의 소리: 목소리 녹음, 저장/삭제, 재생과 소리 크기(입모양용). 기본 노래는 직접 만든 선율이다. 기본 노래는 직접 만든 선율이다.
 const KEY = (id) => `wing-voice:${id}`;
@@ -46,11 +47,12 @@ export function createPlayer(url, onEnd) {
   const a = audioCtx(); a.resume?.();
   // 지도의 스피커 버튼이 꺼져 있으면 소리는 내지 않는다. 입모양은 소리 크기를 읽어 움직이므로 분석기는 그대로 앞에 둔다.
   const analyser = a.createAnalyser(); analyser.fftSize = 512;
-  const out = a.createGain(); out.gain.value = isMuted() ? 0 : 1;
+  const out = a.createGain(); out.gain.value = isMuted() ? 0 : getVolume().voice;
   analyser.connect(out); out.connect(a.destination);
+  const offVol = onVolume((v) => { if (!isMuted()) out.gain.setTargetAtTime(v.voice, a.currentTime, 0.03); });          // 듣는 중에 슬라이더를 움직이면 바로 반영
   const buf = new Uint8Array(analyser.fftSize);
   let amp = 0, stopped = false, stopFn = () => {}, endTimer = null;
-  const finish = () => { if (!stopped) { stopped = true; stopFn(); onEnd?.(); } };
+  const finish = () => { if (!stopped) { stopped = true; stopFn(); offVol(); onEnd?.(); } };
 
   if (url) {
     const el = new Audio(url);
@@ -81,6 +83,6 @@ export function createPlayer(url, onEnd) {
       amp += (Math.min(1, rms * 5.5) - amp) * 0.45;
       return amp;
     },
-    stop() { stopped = true; clearTimeout(endTimer); stopFn(); },
+    stop() { stopped = true; clearTimeout(endTimer); stopFn(); offVol(); },
   };
 }

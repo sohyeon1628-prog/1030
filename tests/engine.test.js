@@ -5,6 +5,10 @@ import { buildLevel, buildPracticeLevel } from "../src/game/level.js";
 import { LEN, LAND_P, CALM_DIST } from "../src/game/constants.js";
 import { mergeStates } from "../src/mergeStates.js";
 
+// 코스와 바람은 난수로 정해지므로, 시험이 매번 같은 결과가 나오게 난수를 고정한다(이 파일 안에서만).
+let seed0 = 12345;
+Math.random = () => (seed0 = (seed0 * 1664525 + 1013904223) >>> 0) / 4294967296;
+
 // 비행 엔진과 코스 만들기, 이 기기와 서버의 기록 합치기
 const FL = { 1: { windStrength: 1, corridorWidth: 220 }, 2: { windStrength: 2, corridorWidth: 140 }, 3: { windStrength: 3, corridorWidth: 100 } };
 const letter = (ws, skyWalk, id = "t") => ({ id, flight: { ...FL[ws], checkpoints: [0, 0.5, 0.75], skyWalk } });

@@ -23,7 +23,8 @@ import { GRADE_NAME } from "./data/letters.js";
 import { buildLetters } from "./data/chapters.js";
 import { FLIGHT_BY_GAP, FLIGHT_COMMON, DELAYS, pickReply } from "./data/story.js";
 import { loadState, saveState, recordDelivery, addMine } from "./storage.js";
-import { setMuted } from "./game/audio.js";
+import { setMuted, isMuted } from "./game/audio.js";
+import SoundButton from "./components/VolumePanel.jsx";
 import { saveVoice, deleteVoice } from "./party/audio.js";
 import { fmtWhen } from "./party/config.js";
 
@@ -177,7 +178,8 @@ export default function App() {
     check(); const t = setInterval(check, 5000); return () => clearInterval(t);
   }, [state.mine]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleMute = () => { setMuted(!state.muted); update((s) => ({ ...s, muted: !s.muted })); };
+  // 소리 켜기/끄기는 소리 설정(VolumePanel)에서 바꾸고, 바뀌면 기록에도 남긴다
+  useEffect(() => { const f = () => update((s) => (s.muted === isMuted() ? s : { ...s, muted: isMuted() })); addEventListener("naru-mute", f); return () => removeEventListener("naru-mute", f); }, [update]);
   const isUnlocked = (i) => i === 0 || !!state.grade[letters[i - 1].id];
   const storyDone = !!state.delivered.l4;
   const orbsTotal = Object.values(state.orbs || {}).reduce((a, b) => a + b, 0) + (state.orbExtra || 0);   // 모은 기억 구슬 전부
@@ -258,7 +260,7 @@ export default function App() {
           <header>
             <button className="icon-btn left" onClick={() => setHowto(true)} aria-label="도움말" title="도움말"><Icon name="help" size={22} /></button>
             <h1>나루 우체국</h1>
-            <button className="icon-btn right" onClick={toggleMute} aria-label={state.muted ? "소리 켜기" : "소리 끄기"} title={state.muted ? "소리 켜기" : "소리 끄기"}><Icon name={state.muted ? "mute" : "sound"} size={22} /></button>
+            <SoundButton className="right" muted={state.muted} />
           </header>
           <div className="row dock">
             <button className="dock-btn" onClick={() => setScreen("mailbox")} aria-label={`편지함${state.mine.length ? ` ${state.mine.length}통` : ""}`} title="편지함">

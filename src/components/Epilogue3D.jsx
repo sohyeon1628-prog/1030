@@ -44,6 +44,7 @@ const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff
 const DAWN = { sky: new THREE.Color("#f9d6a8"), hemiSky: new THREE.Color("#ffe3bd"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffd9a8") };
 
 import SpeedButton from "./SpeedButton.jsx";
+import SoundButton from "./VolumePanel.jsx";
 import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onBack }) {
@@ -274,6 +275,7 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
         <>
           <div className="letterbox top" /><div className="letterbox bottom" />
           <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+          <SoundButton className="intro-sound" />
           <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
           <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={skipToWrite}>건너뛰고 편지 쓰기</button>
           {cap && (cap.who

@@ -5,6 +5,20 @@ let wind = null;
 let bgm = null;
 let muted = false;
 let noiseBuf = null;
+import { getVolume, onVolume } from "../volume.js";
+// 효과음과 바람 소리는 하나의 통로(fxBus)를 지나 스피커로 나간다. 효과음 크기 슬라이더가 이 통로의 크기를 바꾼다.
+let fxBus = null;
+const out = () => {
+  if (!ac) return null;
+  if (!fxBus) { fxBus = ac.createGain(); fxBus.gain.value = getVolume().fx; fxBus.connect(ac.destination); }
+  return fxBus;
+};
+onVolume((v) => {
+  try {
+    if (fxBus) fxBus.gain.setTargetAtTime(v.fx, ac.currentTime, 0.03);
+    if (bgm) bgm.master.gain.setTargetAtTime(Math.max(0.0001, BGM_VOL * v.bgm), ac.currentTime, 0.05);
+  } catch { /* 소리가 없는 상태 */ }
+});
 
 export function audioStart() {
   try {
@@ -20,7 +34,7 @@ export function audioStart() {
     filt.type = "bandpass"; filt.Q.value = 0.8;
     const gain = ac.createGain();
     gain.gain.value = 0.05;
-    src.connect(filt).connect(gain).connect(ac.destination);
+    src.connect(filt).connect(gain).connect(out());
     src.start();
     wind = { src, filt };
     startBgm();
@@ -36,7 +50,7 @@ const BGM_VOL = 0.5;                                  // 배경음악 전체 크
 function startBgm() {
   if (bgm || muted || !ac) return;
   const master = ac.createGain();
-  master.gain.setValueAtTime(0.0001, ac.currentTime); master.gain.exponentialRampToValueAtTime(BGM_VOL, ac.currentTime + 2);   // 천천히 들어온다
+  master.gain.setValueAtTime(0.0001, ac.currentTime); master.gain.exponentialRampToValueAtTime(Math.max(0.0001, BGM_VOL * getVolume().bgm), ac.currentTime + 2);   // 천천히 들어온다
   master.connect(ac.destination);
   const note = (f, at, dur, type, vol, att = 0.05) => {
     const o = ac.createOscillator(), g = ac.createGain();
@@ -103,7 +117,7 @@ function tone(freq, dur, type, vol) {
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, ac.currentTime);
   g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
-  o.connect(g).connect(ac.destination);
+  o.connect(g).connect(out());
   o.start(); o.stop(ac.currentTime + dur);
 }
 
@@ -124,14 +138,14 @@ function puff(type, f0, f1, dur, vol, delay = 0) {
   f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
   const g = ac.createGain();
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.06, dur / 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f).connect(g).connect(ac.destination); s.start(t); s.stop(t + dur + 0.05);
+  s.connect(f).connect(g).connect(out()); s.start(t); s.stop(t + dur + 0.05);
 }
 function glide(f0, f1, dur, type, vol, delay = 0) {
   if (!ac || muted) return;
   const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  o.connect(g).connect(out()); o.start(t); o.stop(t + dur);
 }
 // 같은 소리가 한꺼번에 겹쳐 시끄러워지지 않도록 gap초 안에 또 오면 건너뛴다
 const lastAt = {};
@@ -157,5 +171,5 @@ function tone2(freq, dur, vol, delay) {
   const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
   o.type = "sine"; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  o.connect(g).connect(out()); o.start(t); o.stop(t + dur);
 }

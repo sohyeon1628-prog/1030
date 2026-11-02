@@ -685,3 +685,18 @@ button.auth-google { cursor: pointer; width: 100%; }
 .privacy h2 { margin: 0 0 8px; font: 700 15px "Pretendard", "Noto Sans KR", sans-serif; color: #202124; text-shadow: none; }
 .privacy ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.7; color: #3c4043; }
 .privacy a { color: #1a73e8; } .privacy a.auth-btn { color: #fff; text-decoration: none; }
+
+/* 소리 설정: 스피커 버튼을 누르면 켜기/끄기와 세 가지 크기 슬라이더가 펼쳐진다 */
+.sound-wrap { position: absolute; z-index: 5; }
+.sound-wrap.right { right: 0; top: 0; }
+.sound-wrap .icon-btn { position: static; }
+.sound-wrap.intro-sound { top: 62px; right: 16px; } .sound-wrap.intro-sound .icon-btn { width: 36px; height: 36px; }
+.vol-pop { position: absolute; top: calc(100% + 8px); right: 0; width: 250px; padding: 12px 14px; border-radius: 16px; background: #ffffff; box-shadow: 0 8px 28px rgba(20,40,70,.3); z-index: 10; }
+.vol { display: flex; flex-direction: column; gap: 10px; font-family: "Pretendard", "Noto Sans KR", sans-serif; color: #202124; }
+.vol-switch { display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 99px; padding: 8px 12px; background: #eef1f4; color: #5f6368; font: 700 13px "Pretendard", "Noto Sans KR", sans-serif; cursor: pointer; }
+.vol-switch.on { background: #fdeceb; color: #d9452c; }
+.vol-row { display: grid; grid-template-columns: 78px 1fr 28px; align-items: center; gap: 8px; font-size: 12.5px; }
+.vol-row input[type=range] { width: 100%; accent-color: #d9452c; }
+.vol-row input:disabled { opacity: .4; }
+.vol-row output { text-align: right; color: #80868b; font-variant-numeric: tabular-nums; }
+.panel .vol { margin: 6px 0 10px; }
