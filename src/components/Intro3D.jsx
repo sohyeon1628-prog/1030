@@ -41,17 +41,13 @@ const HOME_POST = new THREE.Vector3(1.0, 2.15, 1.0);
 const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff"), hemiGround: new THREE.Color("#4aa3cf"), sun: new THREE.Color("#fff4e0") };
 const DUSK = { sky: new THREE.Color("#f6b48c"), hemiSky: new THREE.Color("#ffd2a8"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffdcb8") };
 
-import SpeedButton from "./SpeedButton.jsx";
 import SoundButton from "./VolumePanel.jsx";
-import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Intro3D({ nickname = "", onDone }) {
   const wrap = useRef(null);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const timeRef = useRef(0);
-  const [speed, setSpeed] = useState(getSpeed);
-  const speedRef = useRef(speed); speedRef.current = speed;      // 영상 재생 속도(느리게·보통·빠르게)
   const capsRef = useRef(null);
   if (!capsRef.current) capsRef.current = buildIntro(nickname.trim() || "자네");
   const [idx, setIdx] = useState(-1);
@@ -153,7 +149,7 @@ export default function Intro3D({ nickname = "", onDone }) {
     const frame = (now) => {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // 첫 프레임의 시각이 시계보다 앞서도 음수가 되지 않게 last = now;
       aRef.current += dt; const A = aRef.current;
-      timeRef.current += dt * playback(timeRef.current) * speedRef.current;
+      timeRef.current += dt * playback(timeRef.current);
       const T = timeRef.current;
 
       // 카메라: 키프레임 사이를 부드럽게 이동한다
@@ -242,9 +238,10 @@ export default function Intro3D({ nickname = "", onDone }) {
     raf = requestAnimationFrame(frame);
 
     const key = (e) => {
-      if (e.target.tagName === "BUTTON") return;
-      if (e.code === "Space" || e.code === "Enter" || e.code === "ArrowRight") { e.preventDefault(); advance(); }
-      else if (e.code === "ArrowLeft" || e.code === "Backspace") { e.preventDefault(); back(); }
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.code === "ArrowRight") { e.preventDefault(); advance(); }                                  // 다음 장면: → (버튼에 포커스가 있어도)
+      else if (e.code === "ArrowLeft" || e.code === "Backspace") { e.preventDefault(); back(); }        // 이전 장면: ←
+      else if ((e.code === "Space" || e.code === "Enter") && e.target.tagName !== "BUTTON") { e.preventDefault(); advance(); }   // Enter·스페이스도 다음 장면
     };
     addEventListener("keydown", key);
     return () => {
@@ -263,9 +260,9 @@ export default function Intro3D({ nickname = "", onDone }) {
   return (
     <div className="intro" ref={wrap} onPointerDown={advance}>
       <div className="letterbox top" /><div className="letterbox bottom" />
-      <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+      <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.currentTarget.blur(); back(); }}>‹ 이전</button>
+      <button className="pill intro-next" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.currentTarget.blur(); advance(); }}>다음 ›</button>
       <SoundButton className="intro-sound" />
-      <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
       <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={done}>건너뛰기</button>
       {title && <h1 className="intro-title fade">나루 우체국</h1>}
       {/* 섬 이름표는 한 줄씩 바뀌어 금방 지나가지 않도록, 나올 때마다 위에 쌓아 두고 함께 보여 준다 */}
@@ -274,7 +271,7 @@ export default function Intro3D({ nickname = "", onDone }) {
         : cap.who
           ? <div key={idx} className="intro-cap say fade" aria-live="polite"><span className="who">우체부 {cap.who}</span><p>{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p></div>
           : <p key={idx} className="intro-cap narr fade" aria-live="polite">{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p>)}
-      {!ready && <p className="intro-hint">화면을 누르면 다음 장면 · ← 키로 이전 장면</p>}
+      {!ready && <p className="intro-hint">화면을 누르거나 Enter · → 키로 다음, ← 키로 이전 장면</p>}
       {ready && <button className="btn intro-start fade" onPointerDown={(e) => e.stopPropagation()} onClick={done}>첫 배달 시작하기</button>}
     </div>
   );

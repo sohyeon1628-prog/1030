@@ -43,15 +43,11 @@ const PLAYBACK = EPILOGUE_PLAYBACK;           // 재생 속도(오프닝과 같�
 const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff"), hemiGround: new THREE.Color("#4aa3cf"), sun: new THREE.Color("#fff4e0") };
 const DAWN = { sky: new THREE.Color("#f9d6a8"), hemiSky: new THREE.Color("#ffe3bd"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffd9a8") };
 
-import SpeedButton from "./SpeedButton.jsx";
 import SoundButton from "./VolumePanel.jsx";
-import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onBack }) {
   const wrap = useRef(null);
   const timeRef = useRef(0);
-  const [speed, setSpeed] = useState(getSpeed);
-  const speedRef = useRef(speed); speedRef.current = speed;      // 영상 재생 속도(느리게·보통·빠르게)
   const zoomedRef = useRef(false);
   const scriptRef = useRef(null);
   if (!scriptRef.current) scriptRef.current = buildEpilogueScript(nickname.trim() || "자네");
@@ -159,7 +155,7 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
     const frame = (now) => {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // 첫 프레임의 시각이 시계보다 앞서도 음수가 되지 않게 last = now;
       A += dt;
-      timeRef.current += dt * PLAYBACK * speedRef.current;
+      timeRef.current += dt * PLAYBACK;
       const T = timeRef.current;
 
       // 카메라: 키프레임 사이를 부드럽게 이동한다. 편지 쓰는 동안에는 살짝 흔들려 살아 있는 화면처럼 보인다.
@@ -253,9 +249,11 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
     raf = requestAnimationFrame(frame);
 
     const key = (e) => {
-      if (zoomedRef.current || e.target.tagName === "BUTTON") return;                  // 편지를 쓰는 동안에는 키를 가로채지 않는다
-      if (e.code === "Space" || e.code === "Enter" || e.code === "ArrowRight") { e.preventDefault(); advance(); }
-      else if (e.code === "ArrowLeft" || e.code === "Backspace") { e.preventDefault(); back(); }
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (zoomedRef.current) return;                                                              // 편지를 쓰거나 끝난 뒤에는 키를 가로채지 않는다
+      if (e.code === "ArrowRight") { e.preventDefault(); advance(); }                                  // 다음 장면: → (버튼에 포커스가 있어도)
+      else if (e.code === "ArrowLeft" || e.code === "Backspace") { e.preventDefault(); back(); }        // 이전 장면: ←
+      else if ((e.code === "Space" || e.code === "Enter") && e.target.tagName !== "BUTTON") { e.preventDefault(); advance(); }   // Enter·스페이스도 다음 장면
     };
     addEventListener("keydown", key);
     return () => {
@@ -274,14 +272,14 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
       {!zoomed && (
         <>
           <div className="letterbox top" /><div className="letterbox bottom" />
-          <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+          <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.currentTarget.blur(); back(); }}>‹ 이전</button>
+      <button className="pill intro-next" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.currentTarget.blur(); advance(); }}>다음 ›</button>
           <SoundButton className="intro-sound" />
-          <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
           <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={skipToWrite}>건너뛰고 편지 쓰기</button>
           {cap && (cap.who
             ? <div key={idx} className="intro-cap say fade" aria-live="polite"><span className="who">우체부 {cap.who}</span><p>{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p></div>
             : <p key={idx} className="intro-cap narr fade" aria-live="polite">{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p>)}
-          <p className="intro-hint">화면을 누르면 다음 장면 · ← 키로 이전 장면</p>
+          <p className="intro-hint">화면을 누르거나 Enter · → 키로 다음, ← 키로 이전 장면</p>
         </>
       )}
       {zoomed && (
