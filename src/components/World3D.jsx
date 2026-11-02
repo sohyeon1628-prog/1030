@@ -247,8 +247,11 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock(); let raf;
     const v = new THREE.Vector3();
+    let mapT0 = null;                                                     // 지도가 실제로 보이기 시작한 시각: 구름·다리·우체부 날아가기는 이때부터 시작한다(다른 화면 뒤에서 미리 끝나 버리지 않게)
     const loop = () => {
       const t = reduce ? 0 : clock.getElapsedTime();
+      if (mapT0 === null && liveRef.current) mapT0 = t;
+      const te = mapT0 === null ? 0 : t - mapT0;
       wtex.offset.set(t * 0.02, t * 0.012);
       stops.forEach((s, k) => {
         const on = k > 0 && k - 1 === hover && isUnlocked(hover) ? 1.04 : 1;
@@ -308,8 +311,8 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
       });
       {
         const dst = ISLANDS[cur];
-        if (trip && trip.t0 === null && liveRef.current) trip.t0 = t + trip.wait;     // 안내 카드를 닫고 지도가 보이면, 다리가 놓이길 기다렸다가 날아오른다
-        const q = trip && trip.t0 !== null ? Math.min(1, Math.max(0, (t - trip.t0) / trip.dur)) : trip ? 0 : 1;
+        if (trip && trip.t0 === null && liveRef.current) trip.t0 = te + trip.wait;     // 안내 카드를 닫고 지도가 보이면, 다리가 놓이길 기다렸다가 날아오른다
+        const q = trip && trip.t0 !== null ? Math.min(1, Math.max(0, (te - trip.t0) / trip.dur)) : trip ? 0 : 1;
         const e = q * q * (3 - 2 * q), s0 = trip ? trip.a : dst, s1 = trip ? trip.b : dst;
         const flying = trip && q > 0 && q < 1;
         pm.position.set(s0.x + (s1.x - s0.x) * e, 2.5 + Math.sin(t * 2) * 0.14 + (flying ? Math.sin(e * Math.PI) * 1.7 : 0), s0.z + (s1.z - s0.z) * e);
@@ -317,7 +320,7 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
         animatePostman(pm, t, flying ? 0.95 : 0.6);
       }
       // 구름: 떠 있다가, 조건을 채우면 흩어지며 걷힌다. 이어서 땅이 솟고 다리가 놓인다
-      const tb = reduce ? 1e3 : t;
+      const tb = reduce ? 1e3 : te;
       fogs.forEach((f) => {
         if (f.clearing) {                                                     // 걷히는 중: 옅어지며 위로 번져 사라진다
           const u = Math.min(1, Math.max(0, (tb - f.delay) / 3.2));
