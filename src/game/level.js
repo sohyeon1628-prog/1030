@@ -108,11 +108,11 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
     const base = lerp(620, 360, p) - ws * 25;
     x += base * (rnd() < 0.2 ? 0.45 : 0.7 + rnd() * 0.9);
   }
-  // 하늘길: 뛰어올라 위를 걸을 수 있는 구름 블록(옆으로 부딪히면 아프다)과 구름 길의 구멍(뛰어 건넌다)
+  // 하늘길: 뛰어올라 위를 걸을 수 있는 귀여운 해적(부딪히면 아프다)과 구름 길의 구멍(뛰어 건넌다)
   if (walk) {
     let k = 0;
     for (let x = walk.a + 560; x < walk.b - 380; x += 470 + rnd() * 200, k++) {
-      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "block", x, w: 180, h: k % 4 === 0 ? 56 : 92, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
+      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "pirate", x, w: 52, h: 66, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
     }
   }
 
@@ -129,8 +129,8 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   for (let g = 0; g < 3; g++) {                                  // 기억 구슬: 세 개씩 세 무리, 자리는 매번 다르다
     let l = -1;
     const x0 = (0.16 + g * 0.22 + rnd() * 0.08) * LEN;
-    if (walk && g === 1 && walk.obs.length) {                    // 하늘길에서는 구름 블록 위에 구슬이 떠 있어서, 올라가 걸으며 모은다
-      const o = walk.obs.find((q) => q.kind === "block") || walk.obs[0];
+    if (walk && g === 1 && walk.obs.length) {                    // 하늘길에서는 구름 블록 위로 구슬이 떠 있어서, 뛰어 넘으며 모은다
+      const o = walk.obs.find((q) => q.kind === "pirate") || walk.obs[0];
       for (let k = -1; k <= 1; k++) items.push({ kind: "orb", x: o.x + k * 34, lane: 1, y: WALK_Y + o.h + 42, taken: false });
       continue;
     }

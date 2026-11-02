@@ -87,7 +87,7 @@ test("기록 합치기: 더 나아간 쪽과 합집합을 남긴다", () => {
   assert.equal(mergeStates(a, null), a);
 });
 
-// 하늘길 점프: 구름 블록와 구멍 앞에서 알맞게 누르면 넘고, 공중에서 걷는 자세가 풀리지 않는다
+// 하늘길 점프: 해적과 구멍 앞에서 알맞게 누르면 넘고, 공중에서 걷는 자세가 풀리지 않는다
 function jumpAt(kind, d, seed) {
   const F = createFlight(letter(2, true, "jp" + seed), true, false); F.viewW = 800;
   const wk = F.lv.walk, o = wk.obs.find((x) => x.kind === kind); if (!o) return null;
@@ -100,41 +100,22 @@ function jumpAt(kind, d, seed) {
   }
   return { hits: F.totalHits, minWalk };
 }
-test("하늘길: 알맞은 때(블록 앞 160~280px, 구멍 앞 100~180px)에 누르면 구름 블록과 구멍을 모두 넘는다", () => {
-  for (const [kind, ds] of [["block", [160, 220, 280]], ["gap", [100, 140, 180]]]) for (const d of ds) for (let s = 0; s < 8; s++) {
+test("하늘길: 알맞은 때(해적 앞 100~180px, 구멍 앞 100~180px)에 누르면 해적과 구멍을 모두 넘는다", () => {
+  for (const [kind, ds] of [["pirate", [100, 140, 180]], ["gap", [100, 140, 180]]]) for (const d of ds) for (let s = 0; s < 8; s++) {
     const r = jumpAt(kind, d, s); if (!r) continue;
     assert.equal(r.hits, 0, `${kind} ${d}px 시드${s}에서 부딪혔다`);
   }
 });
-test("하늘길: 뛰지 않으면 구름 블록와 구멍에 부딪힌다", () => {
-  for (const kind of ["block", "gap"]) { const r = jumpAt(kind, -9999, 1); if (r) assert.ok(r.hits > 0, kind); }
+test("하늘길: 뛰지 않으면 해적과 구멍에 부딪힌다", () => {
+  for (const kind of ["pirate", "gap"]) { const r = jumpAt(kind, -9999, 1); if (r) assert.ok(r.hits > 0, kind); }
 });
 test("하늘길: 공중에 있는 동안에도 걷는 자세(walkK)가 유지된다", () => {
-  const r = jumpAt("block", 140, 2); assert.ok(r.minWalk > 0.8, `minWalk ${r.minWalk}`);
+  const r = jumpAt("pirate", 140, 2); assert.ok(r.minWalk > 0.8, `minWalk ${r.minWalk}`);
 });
 
-test("하늘길: 구름 블록 위로 뛰어올라 윗면을 걷고, 끝에서 떨어져 길로 내려온다", () => {
-  for (let s = 0; s < 6; s++) {
-    const F = createFlight(letter(2, true, "bk" + s), true, false); F.viewW = 800;
-    const wk = F.lv.walk, o = wk.obs.find((x) => x.kind === "block"); wk.obs = [o];
-    F.lv.rain.length = 0; F.windT = 1e9; for (const k of ["events", "clouds", "bolts", "vortices", "items"]) F.lv[k].length = 0;
-    let t = 0, pressed = false, stoodOn = 0, maxY = 0, overBlockEnd = false;
-    while (!F.finished && t < 120 && F.x < o.x + 260) {
-      if (F.mode === "fly" && !pressed && F.walkK > 0.8 && o.x - F.x <= 240) { F.moves.push(-1); pressed = true; }   // 아래 방향 입력(터치 아래쪽)도 점프다
-      stepFlight(F, 1 / 60, {}); t += 1 / 60;
-      if (F.groundH === o.h && !F.airborne && Math.abs(F.x - o.x) < o.w / 2) stoodOn++;     // 블록 윗면에 서 있는 프레임
-      maxY = Math.max(maxY, F.wy);
-      if (F.x > o.x + o.w / 2 + 40 && F.wy === 0) overBlockEnd = true;                      // 블록을 지나서는 다시 길 높이
-    }
-    assert.ok(stoodOn >= 10, `시드${s}: 블록 위에 서 있지 못했다(${stoodOn}프레임)`);
-    assert.equal(F.totalHits, 0, `시드${s}: 부딪혔다`);
-    assert.ok(overBlockEnd, `시드${s}: 블록 끝에서 길로 내려오지 못했다`);
-    assert.ok(maxY >= o.h && maxY <= 150);
-  }
-});
-test("하늘길: 블록을 옆에서 그냥 걸어 들어가면 막혀서 부딪힌다(계단처럼 올라가지 않는다)", () => {
+test("하늘길: 해적에게 그냥 걸어 들어가면 부딪힌다", () => {
   const F = createFlight(letter(2, true, "bk0"), true, false); F.viewW = 800;
-  const wk = F.lv.walk, o = wk.obs.find((x) => x.kind === "block"); wk.obs = [o];
+  const wk = F.lv.walk, o = wk.obs.find((x) => x.kind === "pirate"); wk.obs = [o];
   F.lv.rain.length = 0; F.windT = 1e9; for (const k of ["events", "clouds", "bolts", "vortices", "items"]) F.lv[k].length = 0;
   let t = 0; while (F.x < o.x && t < 120) { stepFlight(F, 1 / 60, {}); t += 1 / 60; }
   assert.ok(F.totalHits > 0 && F.wy < o.h);

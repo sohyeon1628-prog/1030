@@ -135,8 +135,7 @@ export function stepFlight(F, dt, fx) {
   if (inZone) { F.lane = 1; F.jumpBuf = Math.max(0, (F.jumpBuf || 0) - dt); if (!F.onRoad && Math.abs(F.y - WALK_Y) < 16) F.onRoad = true; }
   else { F.jumpBuf = 0; F.onRoad = false; F.wy = 0; F.wvy = 0; F.airborne = false; F.groundH = 0; }
   if (inZone && F.onRoad) {
-    const support = (wy) => wk.obs.reduce((m, o) => (o.kind === "block" && Math.abs(F.x - o.x) < o.w / 2 && wy >= o.h - 2 ? Math.max(m, o.h) : m), 0);
-    const g = support(F.wy);
+    const g = 0;                                                                           // 해적은 밟고 서는 것이 아니라 뛰어 넘는다
     if (!F.airborne && F.wy > g + 0.5) F.airborne = true;                                  // 블록 끝을 벗어나면 떨어진다
     if (F.jumpBuf > 0 && !F.airborne) { F.wvy = (4 * WALK_JUMP) / WALK_JUMP_T; F.airborne = true; F.jumpBuf = 0; fx.jump?.(); }
     if (F.airborne) {
@@ -218,12 +217,12 @@ export function stepFlight(F, dt, fx) {
     if (B.g <= 0) { B.g = 0.5; say(F, "날개에 힘이 빠져 떨어졌어요! 더 빨리 눌러요", 1.8); fx.splash?.(); if (hit()) return; }
   } else F.brace.on = false;
 
-  // 하늘길의 장애물: 구름 덩어리는 뛰어 넘고, 구멍은 뛰어 건넌다
+  // 하늘길의 장애물: 해적은 뛰어 넘고, 구멍은 뛰어 건넌다
   if (inZone && F.walkK > 0.5) {
-    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "‘점프!’가 빨개지면 화면을 눌러요 (구름 블록 위도 걸어요)", 3.8); }
+    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "‘점프!’가 빨개지면 화면을 눌러요 (해적이 뛰어와요)", 3.8); }
     for (const o of wk.obs) {
       const dx = Math.abs(F.x - o.x), dy = F.y - WALK_Y;
-      const bad = o.kind === "block" ? dx < o.w / 2 + R * 0.4 && dy < o.h - 6 : dx < o.w / 2 - 14 && dy < 14;
+      const bad = o.kind === "pirate" ? dx < o.w / 2 && dy < o.h - 10 : dx < o.w / 2 - 14 && dy < 14;
       if (bad && hit()) return;
       if (!o.passed && F.x - o.x > o.w / 2 + R) { o.passed = true; if (F.inv <= 0) dodged(); }
     }

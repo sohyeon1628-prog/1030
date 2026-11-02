@@ -359,20 +359,27 @@ function practiceLabels(ctx, F, camX, sy) {
 }
 
 // 하늘길: 구름으로 이어진 길. 구멍 자리는 끊겨 있고, 낮은 먹구름 덩어리가 놓여 있다.
-// 구름 블록: 연보라 빛의 폭신한 상자. 윗면에 둥근 구름 뭉치가 솟아 있고 옆면은 한 단계 짙다. 올라가서 걸을 수 있다.
-function cloudBlock(ctx, cx, baseY, w, h, t) {
-  const x0 = cx - w / 2, top = baseY - h;
+// 귀여운 해적: 구름 길을 이쪽으로 뛰어온다. 큰 머리에 검은 모자, 눈가리개, 줄무늬 옷, 칼. 뛰어서 넘어야 한다.
+function pirate(ctx, cx, baseY, t) {
+  const ph = t * 13 + cx * 0.05, bob = Math.abs(Math.sin(ph)) * 7, y = baseY - bob;
   ctx.save();
-  ctx.fillStyle = "rgba(20,80,120,.18)"; path(ctx, () => ctx.ellipse(cx, baseY + 4, w / 2 + 4, 6, 0, 0, Math.PI * 2)); ctx.fill();            // 길에 드리운 그림자
-  const g = ctx.createLinearGradient(0, top, 0, baseY); g.addColorStop(0, "#f4f1ff"); g.addColorStop(1, "#cfc8f6");
-  rr(ctx, x0, top, w, h + 4, 14, g);
-  ctx.strokeStyle = "#a79cec"; ctx.lineWidth = 3; path(ctx, () => ctx.roundRect(x0, top, w, h + 4, 14)); ctx.stroke();
-  for (let i = 0; i < 4; i++) blob(ctx, x0 + 14 + (i * (w - 28)) / 3, top + 3 + (i % 2) * -3, 15 + (i % 2) * 3, "#ffffff");                      // 윗면의 구름 뭉치
-  ctx.fillStyle = "rgba(122,108,210,.18)"; ctx.fillRect(x0 + 6, baseY - 14, w - 12, 8);                                                                 // 옆면 아래쪽 음영
-  const ey = top + h * 0.46 + Math.sin(t * 2 + cx * 0.01) * 0.8;                                                                                       // 얼굴: 눈 두 개와 볼, 미소
-  blob(ctx, cx - 14, ey, 3.2, "#5b4fb8"); blob(ctx, cx + 14, ey, 3.2, "#5b4fb8");
-  ctx.globalAlpha = 0.5; blob(ctx, cx - 24, ey + 8, 5, "#f59ab0"); blob(ctx, cx + 24, ey + 8, 5, "#f59ab0"); ctx.globalAlpha = 1;
-  ctx.strokeStyle = "#5b4fb8"; ctx.lineWidth = 2.2; ctx.lineCap = "round"; path(ctx, () => ctx.arc(cx, ey + 3, 6, 0.2, Math.PI - 0.2)); ctx.stroke();
+  ctx.fillStyle = "rgba(20,80,120,.18)"; path(ctx, () => ctx.ellipse(cx, baseY + 4, 30, 6, 0, 0, Math.PI * 2)); ctx.fill();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.strokeStyle = "#3b2a22"; ctx.lineWidth = 8;                                                                       // 달리는 다리
+  for (const k of [0, Math.PI]) { const sw = Math.sin(ph + k), lift = Math.max(0, Math.cos(ph + k)) * 6; path(ctx, () => { ctx.moveTo(cx + 2, baseY - 20 - bob * 0.3); ctx.lineTo(cx - 4 - sw * 14, baseY - 3 - lift); }); ctx.stroke(); }
+  rr(ctx, cx - 22, y - 46, 40, 32, 12, "#fff6e6"); ctx.strokeStyle = "#3b2a22"; ctx.lineWidth = 2.5; path(ctx, () => ctx.roundRect(cx - 22, y - 46, 40, 32, 12)); ctx.stroke();   // 몸통
+  ctx.fillStyle = "#4a7cc9"; for (let i = 0; i < 3; i++) ctx.fillRect(cx - 21, y - 40 + i * 9, 38, 4);                         // 줄무늬
+  ctx.strokeStyle = "#e8b04a"; ctx.lineWidth = 6; path(ctx, () => { ctx.moveTo(cx - 14, y - 36); ctx.lineTo(cx - 36, y - 52 - Math.sin(ph) * 5); }); ctx.stroke();   // 칼을 든 팔
+  ctx.strokeStyle = "#cfd8e2"; ctx.lineWidth = 4; path(ctx, () => { ctx.moveTo(cx - 36, y - 52 - Math.sin(ph) * 5); ctx.lineTo(cx - 44, y - 74 - Math.sin(ph) * 5); }); ctx.stroke();
+  ctx.strokeStyle = "#f2c9a0"; ctx.lineWidth = 6; path(ctx, () => { ctx.moveTo(cx + 12, y - 38); ctx.lineTo(cx + 24, y - 28 + Math.sin(ph) * 6); }); ctx.stroke();            // 반대쪽 팔
+  blob(ctx, cx - 4, y - 62, 21, "#f2c9a0"); ctx.strokeStyle = "#3b2a22"; ctx.lineWidth = 2.5; path(ctx, () => ctx.arc(cx - 4, y - 62, 21, 0, Math.PI * 2)); ctx.stroke();     // 머리
+  ctx.fillStyle = "#222a3a"; path(ctx, () => { ctx.moveTo(cx - 28, y - 70); ctx.quadraticCurveTo(cx - 4, y - 104, cx + 20, y - 70); ctx.quadraticCurveTo(cx - 4, y - 78, cx - 28, y - 70); ctx.closePath(); }); ctx.fill();   // 삼각 모자
+  blob(ctx, cx - 4, y - 84, 4, "#ffffff");                                                                                   // 해골 표시
+  ctx.fillStyle = "#222a3a"; ctx.beginPath(); ctx.arc(cx - 12, y - 63, 6.5, 0, Math.PI * 2); ctx.fill();                             // 눈가리개
+  ctx.strokeStyle = "#222a3a"; ctx.lineWidth = 2; path(ctx, () => { ctx.moveTo(cx - 24, y - 70); ctx.lineTo(cx - 6, y - 58); }); ctx.stroke();
+  blob(ctx, cx + 4, y - 63, 3.4, "#222a3a"); blob(ctx, cx + 5, y - 64, 1.1, "#ffffff");                                              // 눈
+  ctx.globalAlpha = 0.55; blob(ctx, cx - 18, y - 53, 4.5, "#f59ab0"); blob(ctx, cx + 10, y - 53, 4.5, "#f59ab0"); ctx.globalAlpha = 1;   // 볼
+  ctx.strokeStyle = "#7a3b2e"; ctx.lineWidth = 2.2; path(ctx, () => ctx.arc(cx - 3, y - 54, 6, 0.15, Math.PI - 0.15)); ctx.stroke();      // 웃는 입
   ctx.restore();
 }
 
@@ -398,18 +405,18 @@ function skyRoad(ctx, F, camX, sy, W) {
     for (const gx of [g0 - 6, g1 + 6]) { path(ctx, () => { ctx.moveTo(gx, top + 14); ctx.lineTo(gx + (gx === g0 - 6 ? -4 : 4), top + 40); }); ctx.stroke(); }
     ctx.restore();
   }
-  for (const o of w.obs) {                                                     // 구름 블록: 올라가서 걸을 수 있는 폭신한 블록
-    if (o.kind !== "block") continue;
+  for (const o of w.obs) {                                                     // 해적: 뛰어서 넘는다
+    if (o.kind !== "pirate") continue;
     const x = o.x - camX; if (x < -90 || x > W + 90) continue;
-    cloudBlock(ctx, x, sy(WALK_TOP), o.w, o.h, F.t);
+    pirate(ctx, x, sy(WALK_TOP), F.t);
   }
   // 다가오는 장애물 위에 "점프!" 표시: 뛰어야 할 때(약 0.5초 전)부터 깜빡이며 위아래로 흔들린다
   if (F.mode === "fly") for (const o of w.obs) {
     const ahead = o.x - F.x;
     if (ahead < 40 || ahead > 340 || o.passed) continue;
-    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "block" ? ahead < 310 : ahead < 210;       // 이때부터 누르면 된다
+    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "pirate" ? ahead < 210 : ahead < 210;       // 이때부터 누르면 된다
     ctx.save(); ctx.globalAlpha = hot ? 0.95 : 0.55; ctx.textAlign = "center";
-    const y = sy(WALK_TOP + (o.kind === "block" ? o.h : 8)) - 46 + bob;
+    const y = sy(WALK_TOP + (o.kind === "pirate" ? o.h + 30 : 8)) - 46 + bob;
     path(ctx, () => { ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 14); ctx.closePath(); }); ctx.fillStyle = hot ? "#e8553a" : "#ffffff"; ctx.fill();
     ctx.font = `20px ${SANS}`; outlined(ctx, "점프!", x, y - 6);
     ctx.restore();
