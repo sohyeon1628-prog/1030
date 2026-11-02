@@ -116,7 +116,7 @@ function tornado(phase) {
   return g;
 }
 
-// 귀여운 해적(구름 길을 뛰어오는 장애물): 큰 머리, 삼각 모자와 해골 표시, 눈가리개, 줄무늬 옷, 칼. 오른쪽(+x)을 보고 달린다. 발은 y=-46 근처.
+// 귀여운 해적(구름 길을 뛰어오는 장애물): 큰 머리, 삼각 모자와 해골 표시, 눈가리개, 줄무늬 옷, 한쪽 팔 끝에 갈고리. 오른쪽(+x)을 보고 달린다. 발은 y=-46 근처.
 function pirate(phase) {
   const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
   body.position.y = Math.abs(Math.sin(phase)) * 4;                                  // 달리며 통통 뛴다
@@ -133,15 +133,19 @@ function pirate(phase) {
   const band = new THREE.Mesh(new THREE.TorusGeometry(17, 0.9, 8, 28), M("#222a3a")); band.position.set(2, 30, 0); band.rotation.x = Math.PI / 2 + 0.25; body.add(band);
   for (const z of [-1, 1]) body.add(S(3.6, "#f59ab0", 0.6, 1, 1, 15, 21, z * 10.5, { transparent: true, opacity: 0.75 }));   // 볼
   const mouth = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.9, 8, 14, Math.PI), M("#7a3b2e")); mouth.position.set(18.5, 20, 0); mouth.rotation.set(0, Math.PI / 2, Math.PI); body.add(mouth);
-  const arm = (z, swing, raised) => {                                               // 팔: 칼 든 팔은 앞으로 치켜든다
+  const arm = (z, swing, hook) => {                                                  // 팔: 한쪽은 손 대신 갈고리, 앞으로 치켜든다
     const a = new THREE.Group(); a.position.set(2, 8, z * 16);
-    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(3.6, 15, 6, 12), M(raised ? "#fff6e6" : "#fff6e6")); limb.position.y = -9; a.add(limb);
-    a.add(S(4.2, "#f2c9a0", 1, 1, 1, 0, -20, 0));
-    if (raised) { const sw = new THREE.Mesh(new THREE.BoxGeometry(3, 26, 1.6), M("#cfd8e2", { metalness: 0.5, roughness: 0.3 })); sw.position.y = -33; a.add(sw); const gd = new THREE.Mesh(new THREE.BoxGeometry(10, 2.4, 3), M("#e8b04a")); gd.position.y = -21; a.add(gd); }
-    a.rotation.z = raised ? 2.35 + Math.sin(phase) * 0.12 : swing; a.rotation.x = z * 0.15;
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(3.6, 15, 6, 12), M("#fff6e6")); limb.position.y = -9; a.add(limb);
+    if (hook) {
+      const cuff = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 4, 14), M("#6b4a2e")); cuff.position.y = -19; a.add(cuff);          // 팔 끝 가죽띠
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 9, 10), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); shaft.position.y = -25; a.add(shaft);
+      const curve = new THREE.Mesh(new THREE.TorusGeometry(6.2, 1.7, 10, 22, Math.PI * 1.25), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); curve.position.set(-5, -31, 0); curve.rotation.z = -Math.PI * 0.62; a.add(curve);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(1.8, 6, 10), M("#cfd8e2", { metalness: 0.6, roughness: 0.25 })); tip.position.set(-10.2, -26, 0); tip.rotation.z = Math.PI * 0.1; a.add(tip);
+    } else a.add(S(4.2, "#f2c9a0", 1, 1, 1, 0, -20, 0));
+    if (hook) a.scale.setScalar(1.25); a.rotation.z = hook ? 1.2 + Math.sin(phase) * 0.15 : swing; a.rotation.x = z * 0.15;
     return a;
   };
-  body.add(arm(1, 0, true)); body.add(arm(-1, Math.sin(phase) * 0.9 - 0.2, false));
+  body.add(arm(1, 0, true));                                                         // 반대쪽 팔은 없다
   for (const side of [-1, 1]) {                                                     // 다리: 번갈아 앞뒤로
     const leg = new THREE.Group(); leg.position.set(0, -15 + body.position.y * 0, side * 7);
     const sw = Math.sin(phase + (side > 0 ? 0 : Math.PI));

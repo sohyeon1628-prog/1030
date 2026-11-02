@@ -359,7 +359,7 @@ function practiceLabels(ctx, F, camX, sy) {
 }
 
 // 하늘길: 구름으로 이어진 길. 구멍 자리는 끊겨 있고, 낮은 먹구름 덩어리가 놓여 있다.
-// 귀여운 해적: 구름 길을 이쪽으로 뛰어온다. 큰 머리에 검은 모자, 눈가리개, 줄무늬 옷, 칼. 뛰어서 넘어야 한다.
+// 귀여운 해적: 구름 길을 이쪽으로 뛰어온다. 큰 머리에 검은 모자, 눈가리개, 줄무늬 옷, 한쪽 팔 끝의 갈고리. 뛰어서 넘어야 한다.
 function pirate(ctx, cx, baseY, t) {
   const sp = getSprite("pirate", (t * 13 + cx * 0.05) / (Math.PI * 2));               // 3D 해적(머리가 +x): 왼쪽으로 뒤집어 이쪽을 보고 달려오게 한다
   if (sp) {
@@ -375,8 +375,8 @@ function pirate(ctx, cx, baseY, t) {
   for (const k of [0, Math.PI]) { const sw = Math.sin(ph + k), lift = Math.max(0, Math.cos(ph + k)) * 6; path(ctx, () => { ctx.moveTo(cx + 2, baseY - 20 - bob * 0.3); ctx.lineTo(cx - 4 - sw * 14, baseY - 3 - lift); }); ctx.stroke(); }
   rr(ctx, cx - 22, y - 46, 40, 32, 12, "#fff6e6"); ctx.strokeStyle = "#3b2a22"; ctx.lineWidth = 2.5; path(ctx, () => ctx.roundRect(cx - 22, y - 46, 40, 32, 12)); ctx.stroke();   // 몸통
   ctx.fillStyle = "#4a7cc9"; for (let i = 0; i < 3; i++) ctx.fillRect(cx - 21, y - 40 + i * 9, 38, 4);                         // 줄무늬
-  ctx.strokeStyle = "#e8b04a"; ctx.lineWidth = 6; path(ctx, () => { ctx.moveTo(cx - 14, y - 36); ctx.lineTo(cx - 36, y - 52 - Math.sin(ph) * 5); }); ctx.stroke();   // 칼을 든 팔
-  ctx.strokeStyle = "#cfd8e2"; ctx.lineWidth = 4; path(ctx, () => { ctx.moveTo(cx - 36, y - 52 - Math.sin(ph) * 5); ctx.lineTo(cx - 44, y - 74 - Math.sin(ph) * 5); }); ctx.stroke();
+  ctx.strokeStyle = "#fff6e6"; ctx.lineWidth = 7; path(ctx, () => { ctx.moveTo(cx - 14, y - 36); ctx.lineTo(cx - 32, y - 50 - Math.sin(ph) * 4); }); ctx.stroke();   // 갈고리 팔
+  ctx.strokeStyle = "#cfd8e2"; ctx.lineWidth = 3.5; path(ctx, () => { ctx.moveTo(cx - 32, y - 50 - Math.sin(ph) * 4); ctx.lineTo(cx - 40, y - 60 - Math.sin(ph) * 4); ctx.arc(cx - 34, y - 66 - Math.sin(ph) * 4, 7, Math.PI * 0.2, Math.PI * 1.4, true); }); ctx.stroke();
   ctx.strokeStyle = "#f2c9a0"; ctx.lineWidth = 6; path(ctx, () => { ctx.moveTo(cx + 12, y - 38); ctx.lineTo(cx + 24, y - 28 + Math.sin(ph) * 6); }); ctx.stroke();            // 반대쪽 팔
   blob(ctx, cx - 4, y - 62, 21, "#f2c9a0"); ctx.strokeStyle = "#3b2a22"; ctx.lineWidth = 2.5; path(ctx, () => ctx.arc(cx - 4, y - 62, 21, 0, Math.PI * 2)); ctx.stroke();     // 머리
   ctx.fillStyle = "#222a3a"; path(ctx, () => { ctx.moveTo(cx - 28, y - 70); ctx.quadraticCurveTo(cx - 4, y - 104, cx + 20, y - 70); ctx.quadraticCurveTo(cx - 4, y - 78, cx - 28, y - 70); ctx.closePath(); }); ctx.fill();   // 삼각 모자
