@@ -738,3 +738,10 @@ button.auth-google { cursor: pointer; width: 100%; }
 .wt-step h4 small { font-weight: 500; font-size: 11.5px; color: #80868b; }
 .wt-stephint { margin: -2px 0 0; font-size: 12.5px; color: #6b5a44; }
 .wt-step .wt-consent { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(120,90,50,.18); }
+
+/* 도착 화면이 먼저 보이고, 그 뒤에 봉투가 날아오른다(누를 수 있는 것들을 가리지 않는다) */
+.arrive-fly { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.arrive-env { position: absolute; left: 50%; top: 56%; width: 120px; height: 88px; margin: -44px 0 0 -60px; border-radius: 16px; display: grid; place-items: center; color: var(--red);
+  background: linear-gradient(#fffaf0, #f3e7cf); box-shadow: inset 0 3px 0 #fff, 0 8px 0 #d9c3a0, 0 22px 30px rgba(20,80,120,.3); opacity: 0; animation: arrive-fly 2.3s .7s cubic-bezier(.4,.1,.3,1) both; }
+@keyframes arrive-fly { 0% { opacity: 0; transform: translateY(40px) scale(.6) rotate(-6deg); } 18% { opacity: 1; transform: translateY(0) scale(1) rotate(0); } 60% { opacity: 1; transform: translate(18vw, -22vh) scale(.8) rotate(8deg); } 100% { opacity: 0; transform: translate(60vw, -60vh) scale(.3) rotate(-10deg); } }
+@media (prefers-reduced-motion: reduce) { .arrive-env { animation: none; display: none; } }

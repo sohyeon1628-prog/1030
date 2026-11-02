@@ -307,6 +307,7 @@ export default function App() {
 
       {screen === "arrive" && letter && (
         <main className="screen center">
+          {letter.custom && <div className="arrive-fly" aria-hidden="true"><div className="arrive-env"><Icon name="mail" size={64} /></div></div>}   {/* 도착 화면이 먼저 보이고, 그 위로 봉투가 날아간다 */}
           <article className="paper">
             <div className="route">{letter.from} → {letter.to}</div>
             {/* 서사 편지의 도착 반응은 등급과 무관하게 동일. 내 편지의 답장은 도착 날 편지함에서 열린다 */}

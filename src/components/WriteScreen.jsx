@@ -20,7 +20,6 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
   const [paper, setPaper] = useState("cream");
   const [scene, setScene] = useState(CONCEPTS[0].id);     // 도착 장면
   const [preview, setPreview] = useState(false);
-  const [sending, setSending] = useState(false);
   const [checking, setChecking] = useState(false);       // 글 검사 중
   const [blockedMsg, setBlockedMsg] = useState("");      // 보낼 수 없는 표현이 있을 때 안내
   const [rec, setRec] = useState(null);                   // 녹음 중이면 { sec }
@@ -58,10 +57,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
       mode: "link", tos: names, to: names.length > 1 ? `${names[0]} 외 ${names.length - 1}명` : names[0],
       fromName: myName || "누군가", expireDays: 30, paper, body: body.trim(), gap: 2, scene, voice: consent ? voice : null,
     };
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (calm) return onSubmit(payload);
-    setSending(true);                                  // 봉투가 날아가는 연출을 보여 준 뒤 보낸다
-    setTimeout(() => onSubmit(payload), 1300);
+    onSubmit(payload);                                 // 바로 보낸다. 봉투가 날아가는 연출은 도착 화면이 먼저 뜬 뒤에 나온다
   };
 
   // 마우스를 따라 종이가 살짝 기운다(터치에서는 손가락을 따라간다)
@@ -156,12 +152,6 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
         </div>
       </div>
 
-      {sending && (
-        <div className="wt-send" role="status" aria-live="polite">
-          <div className="wt-envelope"><Icon name="mail" size={84} /></div>
-          <p>편지를 부치는 중…</p>
-        </div>
-      )}
       {preview && createPortal(<div className="party-overlay"><PartyScene preview intro party={partyOf({ ...picked, banner: names[0] ? `${names[0]}에게` : picked.banner })} voiceUrl={voice?.url ?? null} from={myName} onClose={() => setPreview(false)} /></div>, document.body)}
     </main>
   );
