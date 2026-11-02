@@ -1,12 +1,13 @@
 // 링크로 편지 보내기 API 클라이언트. 웹에서는 같은 출처(/api)를, 앱(Capacitor 등)에서는 VITE_API_BASE를 쓴다.
-const BASE = import.meta.env.VITE_API_BASE || "";
+export const BASE = import.meta.env.VITE_API_BASE || "";
 const PUBLIC = import.meta.env.VITE_PUBLIC_URL || (typeof location !== "undefined" ? location.origin : "");
 
-async function call(path, opt = {}, timeout = 8000) {
+export async function call(path, opt = {}, timeout = 8000) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeout);
   try {
-    const r = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...opt, signal: ctl.signal });
+    let token = ""; try { token = localStorage.getItem("naru-token") || ""; } catch { /* 저장 불가 */ }
+    const r = await fetch(BASE + path, { headers: { "Content-Type": "application/json", ...(token ? { Authorization: "Bearer " + token } : {}) }, ...opt, signal: ctl.signal });
     const data = await r.json().catch(() => null);
     if (!r.ok) throw Object.assign(new Error(data?.error || "error"), { status: r.status });
     return data;

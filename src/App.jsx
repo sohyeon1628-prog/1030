@@ -9,6 +9,9 @@ import MailboxScreen from "./components/MailboxScreen.jsx";
 import NoteScreen from "./components/NoteScreen.jsx";
 import HowToScreen from "./components/HowToScreen.jsx";
 import NicknameScreen from "./components/NicknameScreen.jsx";
+import ResetScreen from "./components/ResetScreen.jsx";
+import AccountScreen from "./components/AccountScreen.jsx";
+import { getToken, setToken, getMe, pushState, logout as apiLogout, mergeStates } from "./auth.js";
 import Icon from "./components/Icon.jsx";
 import HaemuSay from "./components/HaemuSay.jsx";
 import ShareBox from "./components/ShareBox.jsx";
@@ -25,6 +28,17 @@ import { fmtWhen } from "./party/config.js";
 // 3D 오프닝(해무 이야기) → 지도 → [편지 읽기] → 비행 조작 → [도착] → (에필로그) → 편지섬(내 편지 쓰기) · 편지함
 // 바다 지도는 비행 화면을 뺀 모든 화면의 전체 배경이다.
 export default function App() {
+  // 주소로 돌아오는 것들: 소셜 로그인 토큰(#social=), 비밀번호 재설정 링크(?pwreset=), 이메일 인증 결과(?emailverified=, ?socialerror=)
+  const [entry] = useState(() => {
+    const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const out = { pwreset: q.get("pwreset") || "", notice: q.get("emailverified") === "1" ? "이메일 인증이 끝났어요." : q.get("emailverified") === "0" ? "인증 링크가 만료됐거나 이미 썼어요." : q.has("socialerror") ? "소셜 로그인에 실패했어요. 다시 시도해 주세요." : "" };
+    const tok = h.get("social");
+    if (tok && /^[A-Za-z0-9_-]{20,}$/.test(tok)) { setToken(tok); }
+    if (out.pwreset || out.notice || tok || [...q.keys()].some((k) => ["pwreset", "emailverified", "socialerror"].includes(k))) history.replaceState(null, "", location.pathname);
+    return out;
+  });
+  const [notice, setNotice] = useState(entry.notice);
+  useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(""), 5000); return () => clearTimeout(t); }, [notice]);
   const [state, setState] = useState(() => {
     let s = loadState();
     if (s.nickname === TEST_NICK && !s.delivered.l4) { s = completeAll(s); saveState(s); }   // 테스트 닉네임이면 퀘스트를 모두 완료한 상태로
@@ -32,8 +46,10 @@ export default function App() {
     return s;
   });
   const home = state.storySeen ? "map" : "intro";
-  const [screen, setScreen] = useState(state.nickname ? home : "nickname");   // 닉네임이 없으면 먼저 정한다
+  const [screen, setScreen] = useState(entry.pwreset ? "pwreset" : state.nickname ? home : "nickname");   // 재설정 링크면 새 비밀번호 화면, 닉네임이 없으면 먼저 정한다
   const [nickFrom, setNickFrom] = useState(null);   // 이야기 노트에서 닉네임을 바꾸러 왔는가
+  const [account, setAccount] = useState(getToken() ? { nick: "", providers: [] } : null);   // 로그인한 계정(토큰이 있으면 서버에서 확인한다)
+  const [sync, setSync] = useState("idle");           // idle | saving | saved | offline
   const [howto, setHowto] = useState(state.storySeen && !state.howtoSeen);   // 처음 온 사람에게 자동으로 안내
   const [letter, setLetter] = useState(null);
   const [grade, setGrade] = useState(null);
@@ -45,12 +61,45 @@ export default function App() {
   const [practice, setPractice] = useState(false);   // 지금 하는 비행이 연습인가
   const [run, setRun] = useState(0);                 // 비행 시작마다 증가 → 비행 화면 새로 시작
 
+  // 이 기기와 서버의 기록을 합쳐 쓴다(로그인 직후, 그리고 앱을 열 때)
+  const adoptServer = useCallback((nick, serverState) => {
+    setState((prev) => {
+      let next = mergeStates({ ...prev, nickname: nick }, serverState ? { ...serverState, nickname: nick } : null);
+      next = { ...next, nickname: nick };
+      if (nick === TEST_NICK && !next.delivered.l4) next = completeAll(next);
+      saveState(next); return next;
+    });
+  }, []);
+  // 앱을 열 때 토큰이 있으면 서버에서 내 기록을 가져온다. 토큰이 만료됐으면 로그아웃 처리한다.
+  useEffect(() => {
+    if (!getToken()) return;
+    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (sc === "nickname" ? (seen ? "map" : "intro") : sc)); })
+      .catch((e) => { if (e.status === 401) { setToken(""); setAccount(null); } else setSync("offline"); });
+  }, [adoptServer]);
+  // 기록이 바뀌면 잠시 뒤 서버에 보관한다(로그인한 경우에만). 네트워크가 끊겨도 이 기기에는 이미 저장되어 있다.
+  useEffect(() => {
+    if (!account?.nick || !getToken()) return;   // 로그인한 경우에만
+    setSync("saving");
+    const t = setTimeout(() => pushState(state).then(() => setSync("saved")).catch((e) => { if (e.status === 401) { setToken(""); setAccount(null); } setSync("offline"); }), 1500);
+    return () => clearTimeout(t);
+  }, [state, account?.nick]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const update = useCallback((fn) => setState((prev) => { const next = fn(prev); saveState(next); return next; }), []);
   // 고정된 이야기의 편지 네 통
   const letters = useMemo(() => buildLetters(), []);
   // 처음 날 때(아직 이야기 편지를 하나도 전하지 못했고 연습도 안 했을 때)는 연습 비행부터 시작한다
   const firstTime = !state.practiceDone && Object.keys(state.grade).length === 0;
   // 닉네임: 로그인이 생기기 전까지 쓰는 이름. 해무가 부르는 이름이자 내 편지의 보내는 사람 이름이다.
+  const onAuth = (r) => {
+    setToken(r.token); setAccount(r.user); adoptServer(r.user.nick, r.state);
+    if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(state.storySeen || r.state?.storySeen ? "map" : "intro");
+  };
+  const doLogout = async () => {
+    if (!window.confirm("로그아웃할까요? 이 기기에 남은 기록은 지우고, 다시 로그인하면 서버의 기록을 불러와요.")) return;
+    await apiLogout(); setToken("");
+    try { Object.keys(localStorage).filter((k) => k.startsWith("last-postal-wing") || k.startsWith("wing-voice:")).forEach((k) => localStorage.removeItem(k)); } catch { /* 저장소 사용 불가 */ }
+    location.replace("/");
+  };
   const submitNick = (n) => {
     update((s) => (n === TEST_NICK ? completeAll({ ...s, nickname: n }) : { ...s, nickname: n }));
     if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(home);
@@ -58,7 +107,7 @@ export default function App() {
   // 테스트용 초기화: 저장된 진행(이야기·편지함·녹음·닉네임)을 모두 지우고 처음 상태로 다시 연다.
   const resetAll = () => {
     if (!window.confirm("저장된 진행을 모두 지우고 처음부터 시작할까요? 편지함과 녹음도 함께 지워져요.")) return;
-    try { Object.keys(localStorage).filter((k) => k.startsWith("last-postal-wing") || k.startsWith("wing-voice:")).forEach((k) => localStorage.removeItem(k)); } catch { /* 저장소 사용 불가 */ }
+    try { Object.keys(localStorage).filter((k) => k.startsWith("last-postal-wing") || k.startsWith("wing-voice:") || k === "naru-token").forEach((k) => localStorage.removeItem(k)); } catch { /* 저장소 사용 불가 */ }   // 토큰도 지워서, 서버의 기록이 다시 내려오지 않는다
     location.replace("/");
   };
   const fly = () => { setPractice(firstTime); setRun((r) => r + 1); setScreen("flight"); };
@@ -175,7 +224,15 @@ export default function App() {
         <World3D letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
       </div>
 
-      {screen === "nickname" && <NicknameScreen initial={state.nickname} onSubmit={submitNick} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}
+      {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}
+
+      {screen === "pwreset" && <ResetScreen token={entry.pwreset} onDone={() => { setToken(""); setAccount(null); setScreen("nickname"); }} />}
+      {screen === "account" && account?.nick && (
+        <AccountScreen user={account} sync={sync} onBack={() => setScreen("note")} onLogout={doLogout}
+          onUser={(u) => { setAccount(u); if (u.nick !== state.nickname) update((s) => ({ ...s, nickname: u.nick })); }}
+          onDeleted={() => { setToken(""); try { Object.keys(localStorage).filter((k) => k.startsWith("last-postal-wing") || k.startsWith("wing-voice:")).forEach((k) => localStorage.removeItem(k)); } catch { /* 저장소 사용 불가 */ } location.replace("/"); }} />
+      )}
+      {notice && <button className="toast" onClick={() => setNotice("")}>{notice}</button>}
 
       {screen === "practiceEnd" && letter && (
         <main className="screen center">
@@ -211,7 +268,7 @@ export default function App() {
 
       {screen === "write" && <WriteScreen myName={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
       {screen === "mailbox" && <MailboxScreen focusId={focusId} onDeleteVoice={(m) => { deleteVoice(m.id); patchMine(m.id, { hasVoice: false }); }} onRetry={(m) => upload(m).then((r) => { if (r.status === "error") window.alert("아직 서버에 닿지 못했어요."); })} onPatch={patchMine} orbsTotal={orbsTotal} mine={state.mine} grades={state.grade} onBack={() => { setFocusId(null); setScreen("map"); }} />}
-      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} onNick={() => { setNickFrom(true); setScreen("nickname"); }} onReset={resetAll} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
+      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} account={account} sync={sync} onAccount={() => setScreen("account")} onNick={() => { setNickFrom(true); setScreen("nickname"); }} onReset={resetAll} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
 
       {screen === "read" && letter && (
         <main className="screen center">

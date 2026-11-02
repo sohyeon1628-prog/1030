@@ -12,14 +12,22 @@
 //   POST   /api/moderate             보내기 전에 글(to, body)을 검사한다 → { ok } (보낼 때 서버가 다시 검사한다)
 // 신고: 같은 사람(IP)이 여러 번 눌러도 1건으로 센다. 3명이 신고하면 편지가 숨겨지고, 녹음이 있는 편지는 첫 신고에 녹음 재생만 먼저 막는다.
 // 글 검사: blocklist.json의 단어로 막거나(block), 보내되 검토 대상으로 표시한다(review). 신고·검토 대상은 관리자 화면(/admin)에서 삭제·무시·발신자 차단.
-// 저장: DATA_DIR(기본 server/data)에 편지당 JSON 파일 하나, 녹음은 voice-<id>.bin/.json, 차단 목록은 blocked.json. secret과 IP는 해시만 저장한다.
-// 실행: npm run server  (PORT, DATA_DIR, ALLOW_ORIGIN, TRUST_PROXY, ADMIN_TOKEN, HASH_SALT 환경변수. ADMIN_TOKEN이 없으면 관리자 기능은 꺼진다)
+// 계정: 닉네임 + 비밀번호로 가입·로그인하면 진행과 편지함이 서버에 보관되어 기기를 바꿔도 이어진다(accounts.js). /api/auth/*, /api/me
+// 저장: DATA_DIR(기본 server/data)의 SQLite 파일 naru.db 하나에 편지·녹음·계정·진행·차단 목록을 모두 담는다(db.js). secret과 IP는 해시만 저장한다.
+// 백업: 시작할 때와 BACKUP_EVERY_HOURS(기본 24)시간마다 DATA_DIR/backups(BACKUP_DIR)에 naru-날짜.db를 만들고 BACKUP_KEEP(기본 14)개만 남긴다. 수동: npm run backup
+// 관리자: ADMIN_TOKEN 환경변수, 없으면 처음 시작할 때 무작위 토큰을 만들어 DATA_DIR/.admin-token에 저장하고 콘솔에 한 번 알려 준다.
+// 메일: 비밀번호 찾기·이메일 인증은 RESEND_API_KEY + MAIL_FROM이 있으면 실제로 보내고, 없으면 개발 모드(콘솔과 outbox.log에 링크만 기록). 소셜 로그인은 GOOGLE_CLIENT_ID·CLIENT_SECRET, 공개 주소는 PUBLIC_URL(accounts.js 참고)
+// 실행: npm run server  (PORT, DATA_DIR, BACKUP_DIR, BACKUP_KEEP, BACKUP_EVERY_HOURS, ALLOW_ORIGIN, TRUST_PROXY, ADMIN_TOKEN, HASH_SALT 환경변수)
+//   GET    /api/health               살아 있는지와 저장 상태(배포 환경의 상태 확인용)
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { screenText } from "./moderation.js";
+import { openDb } from "./db.js";
+import { makeAccounts } from "./accounts.js";
+import { makeMailer } from "./mail.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -27,8 +35,17 @@ const DATA = process.env.DATA_DIR || path.join(here, "data");
 const DIST = path.join(here, "..", "dist");
 const ORIGINS = (process.env.ALLOW_ORIGIN || "").split(",").map((s) => s.trim()).filter(Boolean);   // 앱(다른 출처)에서 호출할 때
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 fs.mkdirSync(DATA, { recursive: true });
+const db = openDb(DATA);
+// 관리자 토큰: 환경변수가 없으면 처음 한 번 만들어 파일에 보관한다(그래서 기본으로 관리자 화면이 켜져 있다)
+const TOKEN_FILE = path.join(DATA, ".admin-token");
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || (() => {
+  try { return fs.readFileSync(TOKEN_FILE, "utf8").trim(); } catch { /* 처음 */ }
+  const t = crypto.randomBytes(18).toString("base64url");
+  fs.writeFileSync(TOKEN_FILE, t, { mode: 0o600 });
+  console.log(`관리자 토큰을 새로 만들었습니다: ${t}  (파일: ${TOKEN_FILE}) — /admin 에서 입력하세요. 다시 보려면 이 파일을 열면 됩니다.`);
+  return t;
+})();
 
 const PAPERS = new Set(["cream", "mint", "coral", "star", "gold"]);
 const GRADES = new Set(["perfect", "safe", "rough"]);
@@ -39,16 +56,14 @@ const REACTIONS = new Set(["clap", "fireworks", "heart"]);
 const MAX_VOICE = 450 * 1024;                                     // 녹음 한 개의 최대 크기(30초 녹음은 보통 120KB 안팎)
 
 // ── 유틸 ──
-const file = (id) => path.join(DATA, `${id}.json`);
 const validId = (id) => /^[A-Za-z0-9_-]{12}$/.test(id);
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const newId = () => crypto.randomBytes(9).toString("base64url");           // 12자, 추측할 수 없다(72비트)
 const clean = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim().slice(0, max) : "");
-const load = (id) => { try { return JSON.parse(fs.readFileSync(file(id), "utf8")); } catch { return null; } };
-const save = (l) => { const tmp = file(l.id) + ".tmp"; fs.writeFileSync(tmp, JSON.stringify(l)); fs.renameSync(tmp, file(l.id)); };   // 쓰다 끊겨도 깨지지 않게
-const remove = (id) => { try { fs.unlinkSync(file(id)); } catch { /* 이미 없음 */ } };
-const vfile = (id, ext) => path.join(DATA, `voice-${id}.${ext}`);
-const loadVoiceMeta = (id) => { try { return JSON.parse(fs.readFileSync(vfile(id, "json"), "utf8")); } catch { return null; } };
+const load = (id) => db.getLetter(id);
+const save = (l) => db.putLetter(l);
+const remove = (id) => db.delLetter(id);
+const loadVoiceMeta = (id) => db.getVoiceMeta(id);
 const liveLetter = (id) => { const l = load(id); return !!l && l.expiresAt > Date.now() && l.reports < 3; };
 const voiceLive = (id) => { const l = load(id); return liveLetter(id) && !l.voiceBlocked; };      // 신고가 들어온 편지의 녹음은 검토가 끝날 때까지 재생하지 않는다
 
@@ -62,8 +77,8 @@ function cors(req, res) {
   if (o && ORIGINS.includes(o)) {
     res.setHeader("Access-Control-Allow-Origin", o);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
 }
 function readJson(req, limit = 16 * 1024) {
@@ -79,9 +94,9 @@ function readJson(req, limit = 16 * 1024) {
   });
 }
 // IP는 해시로만 다룬다(신고 중복 확인, 발신자 차단). 소금은 환경변수 HASH_SALT, 없으면 데이터 폴더에 한 번 만들어 둔다.
-const SALT = process.env.HASH_SALT || (() => { const f = path.join(DATA, ".salt"); try { return fs.readFileSync(f, "utf8"); } catch { const v = crypto.randomBytes(16).toString("hex"); fs.writeFileSync(f, v); return v; } })();
-const BLOCKED_FILE = path.join(DATA, "blocked.json");
-const readBlocked = () => { try { return JSON.parse(fs.readFileSync(BLOCKED_FILE, "utf8")); } catch { return []; } };
+const SALT = process.env.HASH_SALT || (() => { let v = db.kvGet("salt"); if (!v) { v = crypto.randomBytes(16).toString("hex"); db.kvSet("salt", v); } return v; })();
+const readBlocked = () => { try { return JSON.parse(db.kvGet("blocked") || "[]"); } catch { return []; } };
+const writeBlocked = (list) => db.kvSet("blocked", JSON.stringify(list));
 const ipHash = (req) => sha(SALT + ":" + ipOf(req));
 const senderBlocked = (req) => readBlocked().includes(ipHash(req));
 const ipOf = (req) => (TRUST_PROXY && req.headers["x-forwarded-for"] ? String(req.headers["x-forwarded-for"]).split(",")[0].trim() : req.socket.remoteAddress) || "?";
@@ -94,22 +109,13 @@ function limited(ip, max = 8, windowMs = 3600 * 1000) {
   arr.push(now); hits.set(ip, arr); return false;
 }
 
-// 만료된 편지 정리(시작할 때와 한 시간마다)
+// 만료된 편지·세션과 쓰지 않는 녹음 정리(시작할 때와 한 시간마다)
 function purge() {
   const now = Date.now();
-  for (const f of fs.readdirSync(DATA)) {
-    if (!/^[A-Za-z0-9_-]{12}\.json$/.test(f)) continue;               // 편지 파일만(blocked.json·voice-*는 제외)
-    const l = load(f.slice(0, -5));
-    if (!l || l.expiresAt < now) remove(f.slice(0, -5));
-  }
+  db.purgeLetters(now); db.purgeSessions(now); db.purgeTokens(now);
   // 녹음: 만료됐거나, 올린 지 한 시간이 지났는데 살아 있는 편지가 하나도 쓰지 않으면 지운다
-  for (const f of fs.readdirSync(DATA)) {
-    const m = /^voice-([A-Za-z0-9_-]{12})\.json$/.exec(f);
-    if (!m) continue;
-    const meta = loadVoiceMeta(m[1]);
-    if (!meta || meta.expiresAt < now || (now - meta.createdAt > 3600 * 1000 && !meta.letters.some(liveLetter))) {
-      for (const ext of ["json", "bin"]) { try { fs.unlinkSync(vfile(m[1], ext)); } catch { /* 이미 없음 */ } }
-    }
+  for (const meta of db.allVoiceMeta()) {
+    if (meta.expiresAt < now || (now - meta.createdAt > 3600 * 1000 && !meta.letters.some(liveLetter))) db.delVoice(meta.id);
   }
 }
 purge(); setInterval(purge, 3600 * 1000).unref();
@@ -145,7 +151,7 @@ function saveLetter(l) {
   save(l);
   if (!l.voice) return;
   const meta = loadVoiceMeta(l.voice);
-  if (meta) { meta.letters.push(l.id); fs.writeFileSync(vfile(l.voice, "json"), JSON.stringify(meta)); }
+  if (meta) { meta.letters.push(l.id); db.putVoiceMeta(meta); }
 }
 
 // ── 녹음 ──
@@ -160,14 +166,13 @@ async function voices(req, res, parts) {
     const buf = Buffer.from(m[2], "base64");
     if (!buf.length || buf.length > MAX_VOICE) return send(res, 413, { error: "too_large" });
     const vid = newId();
-    fs.writeFileSync(vfile(vid, "bin"), buf);
-    fs.writeFileSync(vfile(vid, "json"), JSON.stringify({ id: vid, mime: m[1], createdAt: Date.now(), expiresAt: Date.now() + 90 * DAY, letters: [] }));
+    db.putVoice({ id: vid, mime: m[1], createdAt: Date.now(), expiresAt: Date.now() + 90 * DAY, letters: [] }, buf);
     return send(res, 201, { id: vid });
   }
   if (req.method === "GET" && id && validId(id)) {
     const meta = loadVoiceMeta(id);
     if (!meta || !meta.letters.some(voiceLive)) return send(res, 404, { error: "not_found" });
-    let buf; try { buf = fs.readFileSync(vfile(id, "bin")); } catch { return send(res, 404, { error: "not_found" }); }
+    const buf = db.getVoiceBin(id); if (!buf) return send(res, 404, { error: "not_found" });
     res.writeHead(200, { "Content-Type": meta.mime, "Content-Length": buf.length, "Cache-Control": "private, max-age=3600" });
     return res.end(buf);
   }
@@ -177,16 +182,13 @@ async function voices(req, res, parts) {
 // ── 관리자(ADMIN_TOKEN이 있을 때만) ──
 // 신고가 들어왔거나 검토 대상으로 표시된 편지를 보고, 삭제·무시(신고 초기화)·발신자 차단을 한다. 토큰은 X-Admin-Token 헤더로 받는다.
 async function admin(req, res, parts) {
-  if (!ADMIN_TOKEN) return send(res, 404, { error: "not_found" });
   if (limited(ipOf(req) + ":admin", 60)) return send(res, 429, { error: "too_many" });
   const a = Buffer.from(sha(String(req.headers["x-admin-token"] || ""))), b = Buffer.from(sha(ADMIN_TOKEN));
   if (!crypto.timingSafeEqual(a, b)) return send(res, 403, { error: "forbidden" });
   if (req.method === "GET" && parts[2] === "queue") {
     const out = [];
-    for (const f of fs.readdirSync(DATA)) {
-      if (!/^[A-Za-z0-9_-]{12}\.json$/.test(f)) continue;
-      const l = load(f.slice(0, -5));
-      if (l && l.expiresAt > Date.now() && (l.reports > 0 || l.flagged)) out.push({ id: l.id, from: l.from, to: l.to, body: l.body, scene: l.scene, voice: !!l.voice, voiceBlocked: !!l.voiceBlocked, reports: l.reports, flagged: !!l.flagged, flagWord: l.flagWord, createdAt: l.createdAt, hidden: l.reports >= 3, senderBlocked: !!l.sh && readBlocked().includes(l.sh) });
+    for (const l of db.allLetters()) {
+      if (l.expiresAt > Date.now() && (l.reports > 0 || l.flagged)) out.push({ id: l.id, from: l.from, to: l.to, body: l.body, scene: l.scene, voice: !!l.voice, voiceBlocked: !!l.voiceBlocked, reports: l.reports, flagged: !!l.flagged, flagWord: l.flagWord, createdAt: l.createdAt, hidden: l.reports >= 3, senderBlocked: !!l.sh && readBlocked().includes(l.sh) });
     }
     return send(res, 200, { items: out.sort((x, y) => y.reports - x.reports || y.createdAt - x.createdAt) });
   }
@@ -196,7 +198,7 @@ async function admin(req, res, parts) {
   if (req.method === "POST" && parts[4] === "dismiss") { l.reports = 0; l.reporters = []; l.flagged = false; l.voiceBlocked = false; save(l); return send(res, 200, { ok: true }); }
   if (req.method === "POST" && parts[4] === "block-sender") {
     if (!l.sh) return send(res, 400, { error: "no_sender_hash" });
-    const list = readBlocked(); if (!list.includes(l.sh)) { list.push(l.sh); fs.writeFileSync(BLOCKED_FILE, JSON.stringify(list)); }
+    const list = readBlocked(); if (!list.includes(l.sh)) { list.push(l.sh); writeBlocked(list); }
     remove(id); return send(res, 200, { ok: true });
   }
   return send(res, 405, { error: "method" });
@@ -216,13 +218,16 @@ async function load(){tok=$("#t").value;sessionStorage.setItem("naru-admin",tok)
    const p=document.createElement("pre");p.textContent=it.body;d.append(m,p);
    for(const[label,method,path,ok]of[["삭제","DELETE","letters/"+it.id],["신고 무시","POST","letters/"+it.id+"/dismiss"],["발신자 차단+삭제","POST","letters/"+it.id+"/block-sender"]]){const b=document.createElement("button");b.textContent=label;
     b.onclick=async()=>{if(label!=="신고 무시"&&!confirm(label+"할까요?"))return;try{await api(method,path);load()}catch(e){$("#msg").textContent="실패: "+e.message}};d.append(b)}
-   box.append(d)}}catch(e){$("#msg").textContent=e.message==="403"?"토큰이 맞지 않습니다":e.message==="404"?"관리자 기능이 꺼져 있습니다(서버에 ADMIN_TOKEN 설정 필요)":"오류: "+e.message}}
+   box.append(d)}}catch(e){$("#msg").textContent=e.message==="403"?"토큰이 맞지 않습니다":e.message==="404"?"관리자 기능을 쓸 수 없습니다":"오류: "+e.message}}
 $("#go").onclick=load;if(tok)load();
 </script>`;
 
 // ── API ──
+const accounts = makeAccounts({ db, send, readJson, limited, ipOf, mailer: makeMailer(DATA) });
 async function api(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);          // ["api","letters",id?,sub?]
+  if (parts[1] === "health") return send(res, 200, { ok: true, ...db.counts(), backup: db.kvGet("last_backup") || null });
+  if (parts[1] === "auth" || parts[1] === "me") return accounts(req, res, parts, url);
   if (parts[1] === "voices") return voices(req, res, parts);
   if (parts[1] === "admin") return admin(req, res, parts);
   if (parts[1] === "moderate" && req.method === "POST") {           // 보내기 전에 글을 미리 검사한다(막힌 글은 비행 전에 고칠 수 있다)
@@ -304,7 +309,7 @@ function serveStatic(req, res, url) {
   fs.createReadStream(p).pipe(res);
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   cors(req, res);
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   const url = new URL(req.url, "http://localhost");
@@ -316,4 +321,35 @@ http.createServer(async (req, res) => {
     send(res, e.status || 500, { error: e.status ? e.message : "server_error" });
     if (!e.status) console.error(e);
   }
-}).listen(PORT, () => console.log(`우편 서버: http://127.0.0.1:${PORT}  (저장: ${DATA})`));
+});
+server.listen(PORT, () => console.log(`우편 서버: http://127.0.0.1:${PORT}  (저장: ${db.file})`));
+
+// ── 예전 파일 저장(편지당 JSON)을 쓰던 데이터가 있으면 한 번 DB로 옮기고 legacy/ 폴더로 치운다 ──
+(function migrateLegacy() {
+  const files = fs.readdirSync(DATA);
+  const letters = files.filter((f) => /^[A-Za-z0-9_-]{12}\.json$/.test(f)), metas = files.filter((f) => /^voice-[A-Za-z0-9_-]{12}\.json$/.test(f));
+  if (!letters.length && !metas.length && !files.includes("blocked.json")) return;
+  const dir = path.join(DATA, "legacy"); fs.mkdirSync(dir, { recursive: true });
+  const mv = (f) => { try { fs.renameSync(path.join(DATA, f), path.join(dir, f)); } catch { /* 이미 옮김 */ } };
+  db.tx(() => {
+    for (const f of letters) { try { const l = JSON.parse(fs.readFileSync(path.join(DATA, f), "utf8")); if (!db.getLetter(l.id)) db.putLetter(l); } catch { /* 깨진 파일은 건너뜀 */ } }
+    for (const f of metas) { try { const m = JSON.parse(fs.readFileSync(path.join(DATA, f), "utf8")); const bin = fs.readFileSync(path.join(DATA, f.replace(/\.json$/, ".bin"))); if (!db.getVoiceMeta(m.id)) db.putVoice(m, bin); } catch { /* 건너뜀 */ } }
+    if (files.includes("blocked.json")) { try { const old = JSON.parse(fs.readFileSync(path.join(DATA, "blocked.json"), "utf8")); writeBlocked([...new Set([...readBlocked(), ...old])]); } catch { /* 건너뜀 */ } }
+  });
+  files.filter((f) => letters.includes(f) || metas.includes(f) || /^voice-.*\.bin$/.test(f) || f === "blocked.json").forEach(mv);
+  console.log(`예전 파일 데이터를 DB로 옮겼습니다(편지 ${letters.length}통, 녹음 ${metas.length}개). 원본은 ${dir} 에 있습니다.`);
+})();
+
+// ── 백업: 시작할 때 한 번, 그다음 주기마다. 영구 디스크가 아닌 곳이라면 BACKUP_DIR을 다른 디스크나 클라우드 마운트로 두는 것이 안전하다 ──
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(DATA, "backups");
+const BACKUP_KEEP = Number(process.env.BACKUP_KEEP) || 14;
+async function runBackup() {
+  try { const f = await db.backupTo(BACKUP_DIR, BACKUP_KEEP); db.kvSet("last_backup", new Date().toISOString()); console.log(`백업을 만들었습니다: ${f}`); }
+  catch (e) { console.error("백업 실패:", e.message); }
+}
+runBackup();
+setInterval(runBackup, (Number(process.env.BACKUP_EVERY_HOURS) || 24) * 3600 * 1000).unref();
+
+// 재시작·종료 신호를 받으면 쓰던 요청을 마치고 DB를 깨끗하게 닫는다(배포·재시작에서 데이터가 깨지지 않게)
+function shutdown() { server.close(); db.close(); process.exit(0); }
+process.on("SIGTERM", shutdown); process.on("SIGINT", shutdown);

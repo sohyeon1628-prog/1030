@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node server/index.js",
-    "start": "vite build && node server/index.js"
+    "server": "node --env-file-if-exists=.env server/index.js",
+    "backup": "node --env-file-if-exists=.env server/backup.js",
+    "start": "vite build && node --env-file-if-exists=.env server/index.js"
   },
   "dependencies": {
     "react": "18.3.1",
