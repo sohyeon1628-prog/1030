@@ -767,3 +767,6 @@ textarea, input { font-size: max(16px, 1em); }
   .wt-tilt, .wt-paper, .wt-title, .wt-papers, .wt-send-btns { transform: none !important; transform-style: flat; }
   .wt-tilt { animation: none; transition: none; }
 }
+/* 휴대폰: 글쓰기 화면의 조상에 걸린 선택 금지·변환·애니메이션이 키보드 열림을 막지 않게 한다 */
+.wt-stage, .wt-tilt, .wt-paper { -webkit-user-select: text; user-select: text; }
+@media (pointer: coarse) { .app > .screen { animation: none; } .wt-paper::after { pointer-events: none; } .paper.paper-gold::before { pointer-events: none; } }

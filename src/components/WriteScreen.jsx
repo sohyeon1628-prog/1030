@@ -81,10 +81,10 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
         <div className="wt-tilt">
           <article className={`paper wt-paper paper-${paper}`} style={{ backgroundColor: color }} onClick={(e) => { if (!e.target.closest("input, textarea, a, button")) bodyBox.current?.focus(); }}>   {/* 편지지의 빈 곳을 눌러도 글쓰기 칸이 열린다 */}
             <label className="wt-dear">
-              <input value={to} maxLength={60} autoFocus placeholder="누구에게" aria-label="받는 사람 (여러 명은 쉼표로)" onChange={(e) => setTo(e.target.value)} />
+              <input value={to} maxLength={60} placeholder="누구에게" aria-label="받는 사람 (여러 명은 쉼표로)" onChange={(e) => setTo(e.target.value)} />
               <span>에게</span>
             </label>
-            <textarea ref={bodyBox} enterKeyHint="enter" value={body} maxLength={MAX} placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." aria-label="편지 내용" onChange={(e) => setBody(e.target.value)} />
+            <textarea ref={bodyBox} enterKeyHint="enter" onTouchEnd={(e) => { if (document.activeElement !== e.currentTarget) e.currentTarget.focus(); }} value={body} maxLength={MAX} placeholder="요즘 안부와 하고 싶은 말을 적어 보세요." aria-label="편지 내용" onChange={(e) => setBody(e.target.value)} />
             <div className="wt-foot"><span>{names.length > 1 ? `${names.length}명에게 · ` : ""}{body.length} / {MAX}</span></div>
           </article>
 
