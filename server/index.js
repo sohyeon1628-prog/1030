@@ -62,7 +62,13 @@ const newId = () => crypto.randomBytes(9).toString("base64url");           // 12
 const clean = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "").trim().slice(0, max) : "");
 const load = (id) => db.getLetter(id);
 const save = (l) => db.putLetter(l);
-const remove = (id) => db.delLetter(id);
+// 편지를 지우면, 그 편지만 쓰던 녹음도 바로 지운다(다른 살아 있는 편지가 쓰는 녹음은 남긴다)
+function remove(id) {
+  const l = db.getLetter(id);
+  db.delLetter(id);
+  if (l?.voice) { const m = db.getVoiceMeta(l.voice); if (m && !m.letters.some((x) => x !== id && liveLetter(x))) db.delVoice(l.voice); }
+}
+const removeLettersOf = (uid) => { for (const l of db.allLetters()) if (l.uid === uid) remove(l.id); };      // 계정을 지우면 올린 편지와 녹음도 함께 지운다
 const loadVoiceMeta = (id) => db.getVoiceMeta(id);
 const liveLetter = (id) => { const l = load(id); return !!l && l.expiresAt > Date.now() && l.reports < 3; };
 const voiceLive = (id) => { const l = load(id); return liveLetter(id) && !l.voiceBlocked; };      // 신고가 들어온 편지의 녹음은 검토가 끝날 때까지 재생하지 않는다
@@ -98,7 +104,9 @@ const SALT = process.env.HASH_SALT || (() => { let v = db.kvGet("salt"); if (!v)
 const readBlocked = () => { try { return JSON.parse(db.kvGet("blocked") || "[]"); } catch { return []; } };
 const writeBlocked = (list) => db.kvSet("blocked", JSON.stringify(list));
 const ipHash = (req) => sha(SALT + ":" + ipOf(req));
-const senderBlocked = (req) => readBlocked().includes(ipHash(req));
+// 차단은 두 가지로 한다: 로그인한 사용자는 계정 단위("u:번호"), 로그인하지 않은 경우는 접속 주소의 해시
+const uidOf = (req) => accounts.userOf(req)?.id || null;
+const senderBlocked = (req) => { const b = readBlocked(), u = uidOf(req); return b.includes(ipHash(req)) || (u != null && b.includes("u:" + u)); };
 const ipOf = (req) => (TRUST_PROXY && req.headers["x-forwarded-for"] ? String(req.headers["x-forwarded-for"]).split(",")[0].trim() : req.socket.remoteAddress) || "?";
 
 // ── 호출 제한: 같은 IP가 한 시간에 8통까지만 올릴 수 있다 ──
@@ -127,7 +135,7 @@ const authed = (l, secret) => {
 };
 
 // 요청 본문 → 저장할 편지와 회수용 secret. 비어 있으면 null
-function makeLetter(b, sh = null) {
+function makeLetter(b, sh = null, uid = null) {
   const body = clean(b?.body, MAX_BODY), to = clean(b?.to, MAX_NAME), from = clean(b?.from, MAX_NAME) || "누군가";
   if (!body || !to) return null;
   const sc = screenText(body, to, from);                            // block이면 호출한 쪽에서 막고, review면 표시만 한다
@@ -141,7 +149,7 @@ function makeLetter(b, sh = null) {
     scene: SCENES.has(b.scene) ? b.scene : "island",
     voice: typeof b.voice === "string" && validId(b.voice) && loadVoiceMeta(b.voice) ? b.voice : null,   // 올려 둔 녹음의 id
     createdAt: Date.now(), expiresAt: Date.now() + days * DAY, openedAt: null, opens: 0, reports: 0, reporters: [],
-    sh, flagged: sc.level === "review", flagWord: sc.word,
+    sh, uid, flagged: sc.level === "review", flagWord: sc.word,
   };
   return { l, secret };
 }
@@ -197,8 +205,10 @@ async function admin(req, res, parts) {
   if (req.method === "DELETE") { remove(id); return send(res, 200, { ok: true }); }
   if (req.method === "POST" && parts[4] === "dismiss") { l.reports = 0; l.reporters = []; l.flagged = false; l.voiceBlocked = false; save(l); return send(res, 200, { ok: true }); }
   if (req.method === "POST" && parts[4] === "block-sender") {
-    if (!l.sh) return send(res, 400, { error: "no_sender_hash" });
-    const list = readBlocked(); if (!list.includes(l.sh)) { list.push(l.sh); writeBlocked(list); }
+    if (!l.sh && l.uid == null) return send(res, 400, { error: "no_sender_hash" });
+    const list = readBlocked();
+    for (const k of [l.uid != null ? "u:" + l.uid : null, l.sh]) if (k && !list.includes(k)) list.push(k);       // 계정이 있으면 계정을, 접속 주소도 함께 막는다
+    writeBlocked(list);
     remove(id); return send(res, 200, { ok: true });
   }
   return send(res, 405, { error: "method" });
@@ -223,7 +233,7 @@ $("#go").onclick=load;if(tok)load();
 </script>`;
 
 // ── API ──
-const accounts = makeAccounts({ db, send, readJson, limited, ipOf, mailer: makeMailer(DATA) });
+const accounts = makeAccounts({ db, send, readJson, limited, ipOf, mailer: makeMailer(DATA), onUserDeleted: removeLettersOf });
 async function api(req, res, url) {
   const parts = url.pathname.split("/").filter(Boolean);          // ["api","letters",id?,sub?]
   if (parts[1] === "health") return send(res, 200, { ok: true, ...db.counts(), backup: db.kvGet("last_backup") || null });
@@ -241,7 +251,7 @@ async function api(req, res, url) {
   if (req.method === "POST" && !id) {                              // 올리기
     if (senderBlocked(req)) return send(res, 403, { error: "blocked_sender" });
     if (limited(ipOf(req))) return send(res, 429, { error: "too_many" });
-    const made = makeLetter(await readJson(req), ipHash(req));
+    const made = makeLetter(await readJson(req), ipHash(req), uidOf(req));
     if (!made) return send(res, 400, { error: "empty" });
     if (made.blocked) return send(res, 400, { error: "blocked" });
     saveLetter(made.l);
@@ -253,7 +263,7 @@ async function api(req, res, url) {
     const list = Array.isArray(b.letters) ? b.letters : [];
     if (!list.length || list.length > MAX_BATCH) return send(res, 400, { error: "count" });
     if (senderBlocked(req)) return send(res, 403, { error: "blocked_sender" });
-    const sh = ipHash(req), made = list.map((x) => makeLetter(x, sh));
+    const sh = ipHash(req), uid = uidOf(req), made = list.map((x) => makeLetter(x, sh, uid));
     if (made.some((m) => !m)) return send(res, 400, { error: "empty" });
     if (made.some((m) => m.blocked)) return send(res, 400, { error: "blocked" });
     made.forEach((m) => saveLetter(m.l));

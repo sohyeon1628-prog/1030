@@ -50,11 +50,16 @@ function scribbleTexture() {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 
+import SpeedButton from "./SpeedButton.jsx";
+import { getSpeed, nextSpeed } from "../playSpeed.js";
+
 export default function Bottle3D({ nickname = "", onDone }) {
   const wrap = useRef(null);
   const fadeEl = useRef(null);
   const cutEl = useRef(null);
   const timeRef = useRef(0);
+  const [speed, setSpeed] = useState(getSpeed);
+  const speedRef = useRef(speed); speedRef.current = speed;      // 영상 재생 속도(느리게·보통·빠르게)
   const endedRef = useRef(false);
   const scriptRef = useRef(null);
   if (!scriptRef.current) scriptRef.current = buildBottleScript(nickname.trim() || "나");
@@ -200,7 +205,7 @@ export default function Bottle3D({ nickname = "", onDone }) {
 
     const frame = (now) => {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // 첫 프레임의 시각이 시계보다 앞서도 음수가 되지 않게 last = now; A += dt;
-      timeRef.current += dt * EPILOGUE_PLAYBACK;
+      timeRef.current += dt * EPILOGUE_PLAYBACK * speedRef.current;
       const T = timeRef.current;
       const crossed = (x) => prevT < x && T >= x;                                   // 각 순간을 지날 때 소리 한 번
       if (crossed(AT.bumpT)) fx.bump();
@@ -327,6 +332,7 @@ export default function Bottle3D({ nickname = "", onDone }) {
         <>
           <div className="letterbox top" /><div className="letterbox bottom" />
           <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+          <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
           <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={skip}>건너뛰기</button>
           {cap && <p key={idx} className="intro-cap narr fade" aria-live="polite">{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p>}
           <p className="intro-hint">화면을 누르면 다음 장면 · ← 키로 이전 장면</p>

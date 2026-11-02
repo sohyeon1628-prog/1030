@@ -1,0 +1,18 @@
+# GitHub에 올릴 때마다 정적 검사, 자동 테스트, 빌드를 돌린다. 하나라도 실패하면 표시가 빨갛게 바뀐다.
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

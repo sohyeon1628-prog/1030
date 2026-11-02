@@ -37,16 +37,20 @@ const ENV_T = 34.2;                           // 해무가 가방에서 편지 �
 const LAUNCH = [60.0, 62.6, 65.2, 67.8];     // 편지가 서랍에서 날아오르는 시각
 const FLY = 2.4;                              // 편지가 섬까지 가는 데 걸리는 시간
 const HOME_POST = new THREE.Vector3(1.0, 2.15, 1.0);
-const fly1 = new THREE.Vector3(ISLANDS[1].x - 0.7, 2.7, ISLANDS[1].z + 0.9);   // 해무가 첫 편지를 건네려고 떠 있는 어머니의 섬 위
 
 const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff"), hemiGround: new THREE.Color("#4aa3cf"), sun: new THREE.Color("#fff4e0") };
 const DUSK = { sky: new THREE.Color("#f6b48c"), hemiSky: new THREE.Color("#ffd2a8"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffdcb8") };
+
+import SpeedButton from "./SpeedButton.jsx";
+import { getSpeed, nextSpeed } from "../playSpeed.js";
 
 export default function Intro3D({ nickname = "", onDone }) {
   const wrap = useRef(null);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   const timeRef = useRef(0);
+  const [speed, setSpeed] = useState(getSpeed);
+  const speedRef = useRef(speed); speedRef.current = speed;      // 영상 재생 속도(느리게·보통·빠르게)
   const capsRef = useRef(null);
   if (!capsRef.current) capsRef.current = buildIntro(nickname.trim() || "자네");
   const [idx, setIdx] = useState(-1);
@@ -148,7 +152,7 @@ export default function Intro3D({ nickname = "", onDone }) {
     const frame = (now) => {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // 첫 프레임의 시각이 시계보다 앞서도 음수가 되지 않게 last = now;
       aRef.current += dt; const A = aRef.current;
-      timeRef.current += dt * playback(timeRef.current);
+      timeRef.current += dt * playback(timeRef.current) * speedRef.current;
       const T = timeRef.current;
 
       // 카메라: 키프레임 사이를 부드럽게 이동한다
@@ -196,21 +200,10 @@ export default function Intro3D({ nickname = "", onDone }) {
         if (q >= 0 && q <= 1) { ring.material.opacity = 0.9 * (1 - q); ring.scale.setScalar(1 + q * 1.1); } else ring.material.opacity = 0;
       });
 
-      // 해무: 집 앞에 떠서 날개를 퍼덕이다가, 첫 편지를 들고 어머니의 섬으로 날아가 건네고 돌아온다
-      const L0 = LAUNCH[0], goFrom = L0 - 0.5, arrive0 = L0 + FLY, backFrom = arrive0 + 1.0, homeAt = backFrom + 2.4;
-      const bob = Math.sin(A * 2) * 0.1;
-      let flying = 0;                                                        // 0 제자리, 1 이동 중(날개를 세게 퍼덕인다)
-      if (T < goFrom || T >= homeAt) { pm.position.set(HOME_POST.x, HOME_POST.y + bob, HOME_POST.z); pm.rotation.set(0, 0.5, 0); }
-      else {
-        const dest = fly1;
-        const goQ = smooth((T - goFrom) / (arrive0 - goFrom)), backQ = smooth((T - backFrom) / (homeAt - backFrom));
-        const from = T < backFrom ? HOME_POST : dest, to = T < backFrom ? dest : HOME_POST, q = T < backFrom ? goQ : backQ;
-        pm.position.lerpVectors(from, to, q); pm.position.y += Math.sin(q * Math.PI) * 1.1 + bob;
-        const moving = T < arrive0 || T >= backFrom; flying = moving ? 1 : 0;
-        const yaw = Math.atan2(-(to.z - from.z), to.x - from.x);
-        pm.rotation.set(0, moving ? yaw : 0.5 + Math.PI * 0.2, 0);          // 도착해서는 편지가 닿는 섬 쪽으로 몸을 돌려 건넨다
-      }
-      animatePostman(pm, A, flying ? 0.95 : 0.6);
+      // 해무: 집 앞에 떠서 날개를 퍼덕인다
+      pm.position.set(HOME_POST.x, HOME_POST.y + Math.sin(A * 2) * 0.1, HOME_POST.z);
+      pm.rotation.set(0, 0.5, 0);
+      animatePostman(pm, A);
 
       // 가방 속 편지 네 통: 해무 곁을 돌다가 차례로 각 섬으로 날아간다
       envs.forEach((e, k) => {
@@ -223,7 +216,6 @@ export default function Intro3D({ nickname = "", onDone }) {
           const q = smooth((T - L) / FLY);
           const b = new THREE.Vector3(ISLANDS[k + 1].x, 1.7, ISLANDS[k + 1].z);
           tmp.copy(launched[k]).lerp(b, q); tmp.y += Math.sin(q * Math.PI) * 3.2;
-          if (k === 0) { const q2 = smooth((T - L) / FLY); tmp.copy(pm.position); tmp.x += 0.38; tmp.y -= 0.05 + (1 - q2) * 0.0; tmp.z += 0.32; e.position.copy(tmp); e.rotation.y = A * 1.5; e.rotation.z = 0.1; e.scale.setScalar(1); return; }   // 첫 편지는 해무가 들고 간다
           e.position.copy(tmp); e.rotation.y = A * 3 + k; e.rotation.z = Math.sin(A * 5) * 0.3; e.scale.setScalar(1);
           return;
         }
@@ -271,6 +263,7 @@ export default function Intro3D({ nickname = "", onDone }) {
     <div className="intro" ref={wrap} onPointerDown={advance}>
       <div className="letterbox top" /><div className="letterbox bottom" />
       <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+      <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
       <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={done}>건너뛰기</button>
       {title && <h1 className="intro-title fade">나루 우체국</h1>}
       {/* 섬 이름표는 한 줄씩 바뀌어 금방 지나가지 않도록, 나올 때마다 위에 쌓아 두고 함께 보여 준다 */}

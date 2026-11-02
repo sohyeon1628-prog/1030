@@ -35,7 +35,7 @@ const ISLETS = [{ x: -3.4, z: 5.2 }, { x: 12.4, z: 3.8 }, { x: 8.4, z: 17.4 }].m
 // ISLANDS[0]은 해무의 집(출발점), ISLANDS[i+1]은 편지 i의 도착 섬. 섬 사이의 점선 = 바람길,
 // 부표 = 아직 끊겨 있는 항로(배달하면 사라진다). WebGL이 없으면 SVG 지도로 대체.
 // postOpen: 편지섬이 열렸는가(네 통을 모두 전했는가). onPost: 편지섬을 눌렀을 때(내 편지 쓰기).
-export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost, interactive = true, flyIn = false }) {
+export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost, interactive = true }) {
   const wrap = useRef(null);
   const labels = useRef([]);
   const openRef = useRef(onOpen);
@@ -146,16 +146,15 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     }));
     const turtles = [[12.5, -9, 0], [10.5, -5.5, 2.4]].map(([sc, tc, ph]) => { const m = makeTurtle(); m.scale.setScalar(1.4); world.add(m); return { m, sc, tc, ph }; });
     const pm = makePostman();
-    // 우체부는 오프닝이 끝나면 해무의 집에서, 편지를 전한 뒤에는 방금 섬에서 다음 섬으로 날아간다(바로 서 있지 않는다)
-    const dest = target + 1, from = target >= 0 ? (flyIn ? 0 : (pmAt ?? dest)) : dest;
-    if (target >= 0) pmAt = dest;
-    const trip = target >= 0 && from !== dest ? { a: ISLANDS[from], b: ISLANDS[dest], t0: null, dur: 3.6 } : null;
-    if (target >= 0) { const s0 = ISLANDS[from]; pm.position.set(s0.x, 2.5, s0.z); world.add(pm); }
-
     // ── 진행에 따라 넓어지는 바다: 구름이 걷히고, 지나온 섬은 다리와 땅으로 이어진다
     const delivered = letters.filter((l) => grades[l.id]).length;
     const seen = seenCount === null ? delivered : Math.min(seenCount, delivered);
     seenCount = delivered;
+    // 우체부는 편지를 전한 마지막 섬에 서 있다(처음에는 출발 섬). 새 편지를 전해 다리가 놓이면, 다리가 완성된 뒤에 하늘로 날아올라 그 섬으로 건너간다.
+    const cur = Math.min(delivered, ISLANDS.length - 1), fromAt = pmAt ?? cur;
+    pmAt = cur;
+    const trip = fromAt !== cur ? { a: ISLANDS[fromAt], b: ISLANDS[cur], t0: null, dur: 3.6, wait: seen < delivered ? 4.2 : 0.6 } : null;
+    pm.position.set(ISLANDS[fromAt].x, 2.5, ISLANDS[fromAt].z); world.add(pm);
     const fogs = [], pops = [], bridgesAnim = [], bridgeSegs = [];
     // 아직 열리지 않은 구역을 빈틈없이 덮는 안개: 두 겹(낮은 층 + 높은 층)을 엇갈리게 깔고, 이미 걷힌 곳은 만들지 않는다.
     // 방금 걷힌 곳은 길을 따라 앞에서부터 차례로 흩어진다.
@@ -285,10 +284,11 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
         m.position.set(cx, 0.0 + Math.sin(t * 0.8 + ph) * 0.03, cz); m.rotation.y = -Math.atan2(nz - cz, nx - cx);
         m.userData.flippers.forEach(({ f, z, front, base }) => { f.rotation.y = base + Math.sin(t * 2.2 + (front ? 0 : 1.2)) * 0.45 * z * (front ? -1 : 1); });
       });
-      if (target >= 0) {
-        if (trip && trip.t0 === null && liveRef.current) trip.t0 = t + 0.6;     // 안내 카드를 닫고 지도가 보이면 날아오른다
+      {
+        const dst = ISLANDS[cur];
+        if (trip && trip.t0 === null && liveRef.current) trip.t0 = t + trip.wait;     // 안내 카드를 닫고 지도가 보이면, 다리가 놓이길 기다렸다가 날아오른다
         const q = trip && trip.t0 !== null ? Math.min(1, Math.max(0, (t - trip.t0) / trip.dur)) : trip ? 0 : 1;
-        const e = q * q * (3 - 2 * q), s0 = trip ? trip.a : ISLANDS[dest], s1 = trip ? trip.b : ISLANDS[dest];
+        const e = q * q * (3 - 2 * q), s0 = trip ? trip.a : dst, s1 = trip ? trip.b : dst;
         const flying = trip && q > 0 && q < 1;
         pm.position.set(s0.x + (s1.x - s0.x) * e, 2.5 + Math.sin(t * 2) * 0.14 + (flying ? Math.sin(e * Math.PI) * 1.7 : 0), s0.z + (s1.z - s0.z) * e);
         pm.rotation.y = flying ? Math.atan2(-(s1.z - s0.z), s1.x - s0.x) : 0.5;

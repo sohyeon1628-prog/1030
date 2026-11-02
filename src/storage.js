@@ -38,11 +38,3 @@ export function recordDelivery(state, id, grade) {
 export function addMine(state, entry) {
   return { ...state, mine: [entry, ...state.mine] };
 }
-
-// 테스트용 닉네임: 이 닉네임으로 들어오면 이야기 편지 네 통을 모두 전한 상태가 되어, 에필로그와 편지섬(내 편지 쓰기)을 바로 시험할 수 있다.
-export const TEST_NICK = "소현";
-export function completeAll(state) {
-  let s = { ...state, practiceDone: true, tutorialSeen: true, howtoSeen: true };
-  for (const id of ["l1", "l2", "l3", "l4"]) if (!s.delivered[id]) s = { ...recordDelivery(s, id, "perfect"), orbs: { ...(s.orbs || {}), [id]: 9 } };
-  return s;
-}

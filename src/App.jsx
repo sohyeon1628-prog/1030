@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useMemo, useEffect } from "react";
-import World3D from "./components/World3D.jsx";
-import FlightScreen from "./components/FlightScreen.jsx";
-import Epilogue3D from "./components/Epilogue3D.jsx";
-import Bottle3D from "./components/Bottle3D.jsx";
-import Intro3D from "./components/Intro3D.jsx";
+import React, { useState, useCallback, useMemo, useEffect, lazy, Suspense } from "react";
+// 3D 장면과 비행 화면은 무거워서(three.js) 필요할 때 따로 내려받는다. 로그인 화면은 이 코드 없이 바로 뜬다.
+const World3D = lazy(() => import("./components/World3D.jsx"));
+const FlightScreen = lazy(() => import("./components/FlightScreen.jsx"));
+const Epilogue3D = lazy(() => import("./components/Epilogue3D.jsx"));
+const Bottle3D = lazy(() => import("./components/Bottle3D.jsx"));
+const Intro3D = lazy(() => import("./components/Intro3D.jsx"));
 import WriteScreen from "./components/WriteScreen.jsx";
 import MailboxScreen from "./components/MailboxScreen.jsx";
 import NoteScreen from "./components/NoteScreen.jsx";
@@ -21,7 +22,7 @@ import { uploadLetters } from "./share.js";
 import { GRADE_NAME } from "./data/letters.js";
 import { buildLetters } from "./data/chapters.js";
 import { FLIGHT_BY_GAP, FLIGHT_COMMON, DELAYS, pickReply } from "./data/story.js";
-import { loadState, saveState, recordDelivery, addMine, completeAll, TEST_NICK } from "./storage.js";
+import { loadState, saveState, recordDelivery, addMine } from "./storage.js";
 import { setMuted } from "./game/audio.js";
 import { saveVoice, deleteVoice } from "./party/audio.js";
 import { fmtWhen } from "./party/config.js";
@@ -32,17 +33,16 @@ export default function App() {
   // 주소로 돌아오는 것들: 소셜 로그인 토큰(#social=), 비밀번호 재설정 링크(?pwreset=), 이메일 인증 결과(?emailverified=, ?socialerror=)
   const [entry] = useState(() => {
     const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
-    const out = { pwreset: q.get("pwreset") || "", notice: q.get("emailverified") === "1" ? "이메일 인증이 끝났어요." : q.get("emailverified") === "0" ? "인증 링크가 만료됐거나 이미 썼어요." : q.has("socialerror") ? "소셜 로그인에 실패했어요. 다시 시도해 주세요." : "" };
+    const out = { pwreset: q.get("pwreset") || "", notice: q.get("emailverified") === "1" ? "이메일 인증이 끝났어요." : q.get("emailverified") === "0" ? "인증 링크가 만료됐거나 이미 썼어요." : q.has("socialerror") ? "소셜 로그인에 실패했어요. 다시 시도해 주세요." : q.get("linked") === "1" ? "소셜 로그인을 연결했어요." : q.get("linked") === "0" ? "이미 다른 계정에 연결된 소셜 계정이에요." : "" };
     const tok = h.get("social");
     if (tok && /^[A-Za-z0-9_-]{20,}$/.test(tok)) { setToken(tok); }
-    if (out.pwreset || out.notice || tok || [...q.keys()].some((k) => ["pwreset", "emailverified", "socialerror"].includes(k))) history.replaceState(null, "", location.pathname);
+    if (out.pwreset || out.notice || tok || [...q.keys()].some((k) => ["pwreset", "emailverified", "socialerror", "linked"].includes(k))) history.replaceState(null, "", location.pathname);
     return out;
   });
   const [notice, setNotice] = useState(entry.notice);
   useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(""), 5000); return () => clearTimeout(t); }, [notice]);
   const [state, setState] = useState(() => {
     let s = loadState();
-    if (s.nickname === TEST_NICK && !s.delivered.l4) { s = completeAll(s); saveState(s); }   // 테스트 닉네임이면 퀘스트를 모두 완료한 상태로
     setMuted(s.muted);
     return s;
   });
@@ -60,7 +60,6 @@ export default function App() {
   const [due, setDue] = useState(null);          // 파티 편지가 막 도착했을 때 알림 { id, to }
   const [focusId, setFocusId] = useState(null);   // 편지함이 열자마자 파티를 보여 줄 편지
   const [practice, setPractice] = useState(false);   // 지금 하는 비행이 연습인가
-  const [justIntro, setJustIntro] = useState(false);   // 오프닝을 막 마쳤는가: 지도에서 우체부가 해무의 집에서 어머니의 섬으로 날아간다
   const [run, setRun] = useState(0);                 // 비행 시작마다 증가 → 비행 화면 새로 시작
 
   // 이 기기와 서버의 기록을 합쳐 쓴다(로그인 직후, 그리고 앱을 열 때)
@@ -68,7 +67,6 @@ export default function App() {
     setState((prev) => {
       let next = mergeStates({ ...prev, nickname: nick }, serverState ? { ...serverState, nickname: nick } : null);
       next = { ...next, nickname: nick };
-      if (nick === TEST_NICK && !next.delivered.l4) next = completeAll(next);
       saveState(next); return next;
     });
   }, []);
@@ -103,19 +101,13 @@ export default function App() {
     location.replace("/");
   };
   const submitNick = (n) => {
-    update((s) => (n === TEST_NICK ? completeAll({ ...s, nickname: n }) : { ...s, nickname: n }));
+    update((s) => ({ ...s, nickname: n }));
     if (nickFrom) { setNickFrom(null); setScreen("note"); } else setScreen(home);
-  };
-  // 테스트용 초기화: 저장된 진행(이야기·편지함·녹음·닉네임)을 모두 지우고 처음 상태로 다시 연다.
-  const resetAll = () => {
-    if (!window.confirm("저장된 진행을 모두 지우고 처음부터 시작할까요? 편지함과 녹음도 함께 지워져요.")) return;
-    try { Object.keys(localStorage).filter((k) => k.startsWith("last-postal-wing") || k.startsWith("wing-voice:") || k === "naru-token").forEach((k) => localStorage.removeItem(k)); } catch { /* 저장소 사용 불가 */ }   // 토큰도 지워서, 서버의 기록이 다시 내려오지 않는다
-    location.replace("/");
   };
   const fly = () => { setPractice(firstTime); setRun((r) => r + 1); setScreen("flight"); };
   const startPractice = () => { setPractice(true); setRun((r) => r + 1); setScreen("flight"); };
   const finishPractice = () => { update((s) => ({ ...s, practiceDone: true, tutorialSeen: true })); setPractice(false); setScreen("practiceEnd"); };
-  const open = (l) => { setJustIntro(false); setLetter(l); setScreen("read"); };
+  const open = (l) => { setLetter(l); setScreen("read"); };
   const closeHowto = () => { setHowto(false); update((s) => ({ ...s, howtoSeen: true })); };
 
   // 링크로 보낼 편지를 서버에 올린다(여러 사람이면 한 번에). 성공하면 편지함 항목마다 링크 정보(id, 회수용 secret)를 붙인다.
@@ -196,10 +188,12 @@ export default function App() {
   if (screen === "intro") {
     return (
       <div className="app">
-        <Intro3D
-          nickname={state.nickname}
-          onDone={() => { update((s) => ({ ...s, storySeen: true })); setJustIntro(true); setHowto(!state.howtoSeen); setScreen("map"); }}
-        />
+        <Suspense fallback={<div className="boot" aria-busy="true">불러오는 중…</div>}>
+          <Intro3D
+            nickname={state.nickname}
+            onDone={() => { update((s) => ({ ...s, storySeen: true })); setHowto(!state.howtoSeen); setScreen("map"); }}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -207,6 +201,7 @@ export default function App() {
   if (screen === "flight" && letter) {
     return (
       <div className="app">
+        <Suspense fallback={<div className="boot" aria-busy="true">불러오는 중…</div>}>
         <FlightScreen
           key={run}
           letter={letter}
@@ -216,6 +211,7 @@ export default function App() {
           onFinish={practice ? finishPractice : finish}
           onExit={() => setScreen("map")}
         />
+        </Suspense>
       </div>
     );
   }
@@ -223,10 +219,12 @@ export default function App() {
   return (
     <div className="app">
       <div className={`bg ${screen === "map" ? "" : "dim"}`}>
-        <World3D flyIn={justIntro} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
+        <Suspense fallback={null}>
+        <World3D letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
+        </Suspense>
       </div>
 
-      {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}
+      {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} />}
 
       {screen === "choosenick" && account?.nick && (
         <ChooseNick user={account} onDone={(u) => { setAccount(u); update((s) => ({ ...s, nickname: u.nick })); setScreen(loadState().storySeen ? "map" : "intro"); }} />
@@ -252,8 +250,8 @@ export default function App() {
         </main>
       )}
 
-      {screen === "bottle" && <Bottle3D nickname={state.nickname} onDone={() => { update((s) => ({ ...s, bottleSeen: true })); setScreen(state.mine.length ? "mailbox" : "map"); }} />}
-      {screen === "epilogue" && <Epilogue3D nickname={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
+      {screen === "bottle" && <Suspense fallback={null}><Bottle3D nickname={state.nickname} onDone={() => { update((s) => ({ ...s, bottleSeen: true })); setScreen(state.mine.length ? "mailbox" : "map"); }} /></Suspense>}
+      {screen === "epilogue" && <Suspense fallback={null}><Epilogue3D nickname={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} /></Suspense>}
 
       {screen === "map" && (
         <main className="screen map-ui">
@@ -273,7 +271,7 @@ export default function App() {
 
       {screen === "write" && <WriteScreen myName={state.nickname} orbsTotal={orbsTotal} onSubmit={submitMine} onBack={() => setScreen("map")} />}
       {screen === "mailbox" && <MailboxScreen focusId={focusId} onDeleteVoice={(m) => { deleteVoice(m.id); patchMine(m.id, { hasVoice: false }); }} onRetry={(m) => upload(m).then((r) => { if (r.status === "error") window.alert("아직 서버에 닿지 못했어요."); })} onPatch={patchMine} orbsTotal={orbsTotal} mine={state.mine} grades={state.grade} onBack={() => { setFocusId(null); setScreen("map"); }} />}
-      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} account={account} sync={sync} onAccount={() => setScreen("account")} onNick={() => { setNickFrom(true); setScreen("nickname"); }} onReset={resetAll} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
+      {screen === "note" && <NoteScreen storyDone={storyDone} nickname={state.nickname} account={account} sync={sync} onAccount={() => setScreen("account")} onNick={() => { setNickFrom(true); setScreen("nickname"); }} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onBack={() => setScreen("map")} onReplay={() => setScreen("intro")} onReplayEpilogue={() => setScreen("epilogue")} bottleSeen={state.bottleSeen} onReplayBottle={() => setScreen("bottle")} />}
 
       {screen === "read" && letter && (
         <main className="screen center">

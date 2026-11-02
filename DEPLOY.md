@@ -43,3 +43,14 @@ docker run -d -p 8787:8787 -v naru-data:/data -e ADMIN_TOKEN=원하는토큰 nar
 1. **메일**: Resend에서 발신 도메인을 인증하고 API 키를 받아 `RESEND_API_KEY`, `MAIL_FROM`(예: `나루 우체국 <noreply@내도메인>`)을 넣는다. 설정하지 않으면 비밀번호 찾기 메일이 실제로는 가지 않는다.
 2. **소셜 로그인**: 각 서비스(Google Cloud Console)에서 앱을 만들고 **돌아오는 주소(Redirect URI)** 를 `PUBLIC_URL/api/auth/oauth/google/callback` 으로 등록한 뒤, 발급받은 ID·Secret을 환경 변수로 넣는다.
 3. 이메일은 인증한 것만 비밀번호 찾기에 쓰인다. 소셜 계정의 인증된 이메일이 기존 계정의 인증된 이메일과 같으면 같은 계정으로 이어진다.
+
+## 개인정보 안내 페이지
+`/privacy`에 수집 항목, 녹음을 누가 듣는지, 보관 기간, 지우는 방법이 적혀 있다. 운영자 연락처는 빌드할 때 `VITE_CONTACT_EMAIL` 환경 변수로 넣는다(Render의 Environment에 넣고 다시 배포). 이 문구는 서비스 동작을 그대로 적은 것이라, 공개 전에 약관·개인정보처리방침으로서 적절한지 전문가의 검토를 받는 것이 좋다.
+
+## 개발 명령
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dev` | 화면 개발 서버(5173). 편지·로그인은 `npm run server`(8787)와 함께 |
+| `npm test` | 서버·엔진·기록 합치기 자동 시험(26개) |
+| `npm run lint` | 정적 검사 |
+| `npm run build` | 배포용 빌드(`dist`) |

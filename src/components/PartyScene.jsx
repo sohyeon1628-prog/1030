@@ -142,23 +142,6 @@ function animateVillager(v, t, ph, mood, amp) {
   if (u.star) u.star.rotation.y = t * 2;
 }
 
-function bannerTexture(text) {
-  const c = document.createElement("canvas"); c.width = 1024, c.height = 288;
-  const k = c.getContext("2d");
-  const g = k.createLinearGradient(0, 0, 0, 288); g.addColorStop(0, "#f26a4b"); g.addColorStop(1, "#d9452c");
-  k.fillStyle = g; k.fillRect(0, 0, 1024, 288);
-  k.strokeStyle = "rgba(255,255,255,.07)"; k.lineWidth = 2;                                   // 천의 결
-  for (let y = 6; y < 288; y += 8) { k.beginPath(); k.moveTo(0, y); k.lineTo(1024, y); k.stroke(); }
-  k.fillStyle = "#ffd166"; k.fillRect(0, 0, 1024, 20); k.fillRect(0, 268, 1024, 20);          // 위아래 금빛 띠
-  k.fillStyle = "#fff6e0"; k.beginPath(); k.roundRect(40, 40, 944, 208, 30); k.fill();                    // 글씨가 또렷하도록 크림색 판
-  k.strokeStyle = "#d9452c"; k.lineWidth = 6; k.setLineDash([18, 14]); k.beginPath(); k.roundRect(54, 54, 916, 180, 22); k.stroke(); k.setLineDash([]);
-  k.textAlign = "center"; k.textBaseline = "middle";
-  let size = 150; k.font = `800 ${size}px "Jua","Noto Sans KR",sans-serif`;
-  while (k.measureText(text).width > 840 && size > 48) { size -= 6; k.font = `800 ${size}px "Jua","Noto Sans KR",sans-serif`; }
-  k.fillStyle = "#b8341f"; k.fillText(text, 512, 152);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
-}
-
 export default function PartyScene({ party = DEFAULT_PARTY, voiceUrl = null, from = "", preview = false, intro = false, onDone, onClose }) {
   const wrap = useRef(null);
   const doneRef = useRef(onDone); doneRef.current = onDone;

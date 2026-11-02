@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { mesh, box, puck, makePostman, animatePostman, makeDolphin, makeFish, makeTurtle, makeGull, animateGull } from "../three/parts.js";
+import { mesh, puck, makePostman, animatePostman, makeDolphin, makeFish, makeTurtle, makeGull, animateGull } from "../three/parts.js";
 
 // 파티 무대 부품. 섬 위 항구(PartyScene 안), 바닷속, 하늘 위 세 무대가 현수막·음표를 함께 쓴다.
 export const COLORS = ["#e8553a", "#5aa3d4", "#ffd166", "#5ec9a7", "#c78fe0", "#f59a4a", "#8fb4dc"];
@@ -23,7 +23,7 @@ function bannerTexture(text) {
 
 // 현수막: 두 기둥 사이에 늘어진 두툼한 천. 바람(물살)에 살랑이고, 위에는 삼각 깃발 줄이 걸린다
 export function addBanner(world, anim, text) {
-  const BW = 4.2, BH = 1.05, bx0 = -2.45, by = 2.7, bz = -0.9;
+  const BW = 4.2, BH = 1.05, by = 2.7, bz = -0.9;
   [-1, 1].forEach((sd) => {
     world.add(mesh(new THREE.CylinderGeometry(0.07, 0.09, 3.9, 12), "#8a5a2b", sd * 2.45, 1.85, bz), mesh(new THREE.SphereGeometry(0.13, 14, 10), "#ffd166", sd * 2.45, 3.85, bz, { metalness: 0.4, roughness: 0.35 }), puck(0.3, 0.18, 0.1, "#6d4521", sd * 2.45, 0.38, bz));
   });

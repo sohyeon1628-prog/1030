@@ -246,7 +246,7 @@ function addPostOffice(g) {
 }
 
 // 바다 위에 떠 있는 둥근 섬 하나 (바위 → 모래 → 잔디 층, 가장자리에 물거품)
-export function buildIsland({ x, z, roof = "#d9d2c3", grade = false, locked = false, arch = false, home = false, style = 0, stop = -1 }) {
+export function buildIsland({ x, z, roof = "#d9d2c3", grade = false, locked = false, arch = false, style = 0, stop = -1 }) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   g.add(puck(1.5, 1.1, 0.5, "#b9a58a", 0, -0.8, 0));
@@ -457,7 +457,7 @@ export function makeTurtle() {
   g.add(mesh(new THREE.SphereGeometry(0.12, 12, 10), "#a8c98a", 0.5, 0.02, 0));
   [-1, 1].forEach((z) => g.add(mesh(new THREE.SphereGeometry(0.02, 6, 5), "#1f2d3a", 0.58, 0.07, z * 0.07)));
   const flippers = [];
-  [[0.25, 1], [0.25, -1], [-0.25, 1], [-0.25, -1]].forEach(([x, z], i) => {
+  [[0.25, 1], [0.25, -1], [-0.25, 1], [-0.25, -1]].forEach(([x, z]) => {
     const f = mesh(new THREE.SphereGeometry(1, 10, 8), "#8ab56e", x, -0.02, z * 0.38); f.scale.set(0.2, 0.035, 0.1); f.rotation.y = z * (x > 0 ? -0.6 : 0.4);
     g.add(f); flippers.push({ f, z, front: x > 0, base: f.rotation.y });
   });

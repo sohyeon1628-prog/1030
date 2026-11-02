@@ -43,9 +43,14 @@ const PLAYBACK = EPILOGUE_PLAYBACK;           // 재생 속도(오프닝과 같�
 const DAY = { sky: new THREE.Color("#bfe6f5"), hemiSky: new THREE.Color("#e4f6ff"), hemiGround: new THREE.Color("#4aa3cf"), sun: new THREE.Color("#fff4e0") };
 const DAWN = { sky: new THREE.Color("#f9d6a8"), hemiSky: new THREE.Color("#ffe3bd"), hemiGround: new THREE.Color("#5aa6d6"), sun: new THREE.Color("#ffd9a8") };
 
+import SpeedButton from "./SpeedButton.jsx";
+import { getSpeed, nextSpeed } from "../playSpeed.js";
+
 export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onBack }) {
   const wrap = useRef(null);
   const timeRef = useRef(0);
+  const [speed, setSpeed] = useState(getSpeed);
+  const speedRef = useRef(speed); speedRef.current = speed;      // 영상 재생 속도(느리게·보통·빠르게)
   const zoomedRef = useRef(false);
   const scriptRef = useRef(null);
   if (!scriptRef.current) scriptRef.current = buildEpilogueScript(nickname.trim() || "자네");
@@ -153,7 +158,7 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
     const frame = (now) => {
       const dt = clamp((now - last) / 1000, 0, 0.05);   // 첫 프레임의 시각이 시계보다 앞서도 음수가 되지 않게 last = now;
       A += dt;
-      timeRef.current += dt * PLAYBACK;
+      timeRef.current += dt * PLAYBACK * speedRef.current;
       const T = timeRef.current;
 
       // 카메라: 키프레임 사이를 부드럽게 이동한다. 편지 쓰는 동안에는 살짝 흔들려 살아 있는 화면처럼 보인다.
@@ -269,6 +274,7 @@ export default function Epilogue3D({ nickname = "", orbsTotal = 0, onSubmit, onB
         <>
           <div className="letterbox top" /><div className="letterbox bottom" />
           <button className="pill intro-back" onPointerDown={(e) => e.stopPropagation()} onClick={back}>‹ 이전</button>
+          <SpeedButton speed={speed} onClick={() => setSpeed((v) => nextSpeed(v))} />
           <button className="pill intro-skip" onPointerDown={(e) => e.stopPropagation()} onClick={skipToWrite}>건너뛰고 편지 쓰기</button>
           {cap && (cap.who
             ? <div key={idx} className="intro-cap say fade" aria-live="polite"><span className="who">우체부 {cap.who}</span><p>{sentences(cap.text).map((x, i) => <span key={i} className="cap-s">{x}</span>)}</p></div>

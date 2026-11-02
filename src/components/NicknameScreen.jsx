@@ -14,7 +14,7 @@ const HINT = {
 };
 
 // 시작 화면: 로그인 / 가입 / 이 기기에서만 쓰기(손님) / 비밀번호 찾기. 로그인하면 진행과 편지함이 서버에 보관되어 기기를 바꿔도 이어진다.
-export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, onReset }) {
+export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack }) {
   const [mode, setMode] = useState("login");              // login | register | guest | forgot
   const [nick, setNick] = useState(initial);
   const [pw, setPw] = useState("");
@@ -84,7 +84,7 @@ export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, 
         <div className="auth-foot">
           {mode !== "guest" && mode !== "forgot" && <button className="auth-link" onClick={() => setMode("guest")}>계정 없이 이 기기에서만 시작</button>}
           {onBack && <button className="auth-link" onClick={onBack}>돌아가기</button>}
-          {onReset && <button className="auth-link faint" onClick={onReset}>저장된 진행 지우고 처음부터</button>}
+          <a className="auth-link faint" href="/privacy" target="_blank" rel="noopener">개인정보와 녹음 안내</a>
         </div>
       </div>
     </main>

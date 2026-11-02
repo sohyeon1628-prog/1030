@@ -36,7 +36,7 @@ const cfg = (p) => {
   return { ...d, id, secret, auth: process.env[`${U}_AUTH_URL`] || d.auth, token: process.env[`${U}_TOKEN_URL`] || d.token, info: process.env[`${U}_USERINFO_URL`] || d.info };
 };
 
-export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
+export function makeAccounts({ db, send, readJson, limited, ipOf, mailer, onUserDeleted = () => {} }) {
   const hash = async (pw, salt) => (await scrypt(pw, salt, 64)).toString("hex");
   const validNick = (n) => typeof n === "string" && /^[^\u0000-\u001F\u007F\s][^\u0000-\u001F\u007F]{0,10}[^\u0000-\u001F\u007F\s]$/.test(n) && !/[<>]/.test(n);
   const validPw = (p) => typeof p === "string" && p.length >= 6 && p.length <= 64;
@@ -91,6 +91,12 @@ export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
         const tj = await tr.json(); if (!tr.ok || !tj.access_token) throw new Error("token");
         const ir = await fetch(c.info, { headers: { Authorization: `Bearer ${tj.access_token}` } });
         const prof = c.norm(await ir.json()); if (!ir.ok || !prof.sub) throw new Error("profile");
+        if (st.data?.link) {                                                                    // 로그인한 사용자가 소셜 로그인을 연결하러 온 경우: 새 세션 대신 연결만 한다
+          const owner = db.identity(p, prof.sub);
+          if (owner && owner !== st.data.link) return redirect(res, "/?linked=0");               // 이미 다른 계정에 연결된 소셜 계정
+          db.addIdentity(p, prof.sub, st.data.link);
+          return redirect(res, "/?linked=1");
+        }
         let uid = db.identity(p, prof.sub);
         if (!uid && prof.verified && prof.email && EMAIL.test(prof.email)) { const same = db.userByEmail(prof.email); if (same) { uid = same.id; db.addIdentity(p, prof.sub, uid); } }   // 같은 인증된 이메일의 계정이면 이어 준다
         if (!uid) {
@@ -104,7 +110,7 @@ export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
     return send(res, 404, { error: "not_found" });
   }
 
-  return async function handle(req, res, parts, url) {
+  async function handle(req, res, parts, url) {
     const ip = ipOf(req);
     if (parts[1] === "auth") {
       const act = parts[2];
@@ -208,13 +214,32 @@ export function makeAccounts({ db, send, readJson, limited, ipOf, mailer }) {
       db.setPass(u.id, await hash(b.next, salt), salt); db.delOtherSessions(u.id, sha(tokenOf(req)));   // 소셜 전용 계정도 여기서 비밀번호를 만들 수 있다
       return send(res, 200, { ok: true });
     }
+    if (sub === "link" && req.method === "POST") {                       // 소셜 로그인 연결: 구글 로그인 주소를 돌려준다(그 주소로 이동하면 연결이 끝난다)
+      const p = parts[3], c = cfg(p || "");
+      if (!c) return send(res, 404, { error: "not_found" });
+      if (db.identitiesOf(u.id).includes(p)) return send(res, 409, { error: "already_linked" });
+      const state = rand(18); db.addToken(sha(state), "oauth", null, { p, link: u.id }, Date.now() + 600000);
+      const q = new URLSearchParams({ response_type: "code", client_id: c.id, redirect_uri: `${publicUrl(req)}/api/auth/oauth/${p}/callback`, state });
+      if (c.scope) q.set("scope", c.scope);
+      return send(res, 200, { url: `${c.auth}?${q}` });
+    }
+    if (sub === "identities" && req.method === "DELETE") {                // 소셜 로그인 해제: 비밀번호가 있어야 한다(없으면 로그인할 방법이 사라진다)
+      const row = db.userRow(u.id), p = parts[3];
+      if (!db.identitiesOf(u.id).includes(p)) return send(res, 404, { error: "not_found" });
+      if (!row.pass) return send(res, 400, { error: "need_password" });
+      db.unlinkIdentity(p, u.id);
+      return send(res, 200, { user: pub(u) });
+    }
     if (!sub && req.method === "DELETE") {
       const b = await readJson(req, 2048), row = db.userRow(u.id);
       const ok = row.pass ? typeof b.password === "string" && safeEq(await hash(b.password, row.salt), row.pass) : b.confirm === row.nick;
       if (!ok) return send(res, 403, { error: "wrong_login" });
+      onUserDeleted(u.id);                                               // 올린 편지와 녹음도 함께 지운다
       db.deleteUser(u.id);
       return send(res, 200, { ok: true });
     }
     return send(res, 404, { error: "not_found" });
-  };
+  }
+  handle.userOf = userOf;                                                  // 편지를 올릴 때 누가 올리는지 알아내는 데 쓴다(계정 단위 차단)
+  return handle;
 }

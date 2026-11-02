@@ -1,4 +1,4 @@
-import { WALK_TOP, WALK_Y } from "./constants.js";
+import { WALK_TOP } from "./constants.js";
 import { H, SX, LEN, ISLAND, LANE_Y, MAX_HITS, JUMP_T, JUMP_SPAN, START_TOP, GRASS, FOOT } from "./constants.js";
 import { lerp, clamp } from "./level.js";
 import { getSprite } from "./sprites3d.js";
@@ -31,20 +31,6 @@ function blob(ctx, x, y, r, fill) {
   ctx.fillStyle = fill;
   path(ctx, () => ctx.arc(x, y, r, 0, Math.PI * 2));
   ctx.fill();
-}
-
-// 줄무늬 패턴 (바리케이드 기둥)
-let stripe = null;
-function stripePattern(ctx) {
-  if (stripe) return stripe;
-  const c = document.createElement("canvas");
-  c.width = c.height = 40;
-  const k = c.getContext("2d");
-  k.fillStyle = C.cream; k.fillRect(0, 0, 40, 40);
-  k.fillStyle = C.red;
-  for (const o of [-40, 0, 40]) { k.beginPath(); k.moveTo(o, 40); k.lineTo(o + 20, 40); k.lineTo(o + 60, 0); k.lineTo(o + 40, 0); k.fill(); }
-  stripe = ctx.createPattern(c, "repeat");
-  return stripe;
 }
 
 // 통통한 크림 구름 (아랫면은 따뜻한 음영)
@@ -344,7 +330,7 @@ function outlined(ctx, text, x, y) {
 
 const ITEM_NAME = { orb: "구슬", shield: "깃털 방패", heart: "심장", ribbon: "순풍 리본", umbrella: "우산" };
 // 연습 비행: 아이템 이름표와, 위험이 닥칠 자리(이름 + 붉은 영역)를 화면에 적어 준다.
-function practiceLabels(ctx, F, camX, sy, seaY) {
+function practiceLabels(ctx, F, camX, sy) {
   const W = ctx.canvas.width;
   ctx.save(); ctx.textAlign = "center"; ctx.font = `17px ${SANS}`;
   const tag = (t, x, y) => outlined(ctx, t, x, y);
@@ -584,7 +570,7 @@ export function drawFlight(ctx, F) {
     ctx.restore();
   }
 
-  if (F.practice) practiceLabels(ctx, F, camX, sy, seaY);
+  if (F.practice) practiceLabels(ctx, F, camX, sy);
 
   // 이륙하며 발을 뗀 자리에 흙먼지
   if (F.lift > 0 && F.lift < 0.6) {

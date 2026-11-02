@@ -671,3 +671,17 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 
 .auth-google.wait { color: #80868b; font-weight: 500; cursor: default; }
 button.auth-google { cursor: pointer; width: 100%; }
+
+.boot { position: fixed; inset: 0; display: grid; place-items: center; background: #3f9fc8; color: #ffffff; font: 600 15px "Pretendard", "Noto Sans KR", sans-serif; }
+.intro-speed { top: 16px; left: 50%; translate: -50% 0; z-index: 4; }
+
+/* 녹음 동의, 개인정보 안내 */
+.wt-consent { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 4px; font: 400 12.5px/1.6 "Pretendard", "Noto Sans KR", sans-serif; color: #3c4a5a; cursor: pointer; }
+.wt-consent input { margin-top: 3px; flex: none; width: 16px; height: 16px; }
+.wt-consent a { color: #1a73e8; }
+.auth-link.faint { text-decoration: none; display: inline-block; }
+.auth-card.privacy { width: min(620px, 94vw); max-height: 92vh; overflow-y: auto; gap: 8px; }
+.privacy section { border-top: 1px solid #e8eaed; padding: 12px 0 4px; }
+.privacy h2 { margin: 0 0 8px; font: 700 15px "Pretendard", "Noto Sans KR", sans-serif; color: #202124; text-shadow: none; }
+.privacy ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.7; color: #3c4043; }
+.privacy a { color: #1a73e8; } .privacy a.auth-btn { color: #fff; text-decoration: none; }

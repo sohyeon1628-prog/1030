@@ -1,9 +1,9 @@
-import React, { useState } from "react";
-import { changeNick, changeEmail, changePassword, deleteAccount } from "../auth.js";
+import React, { useEffect, useState } from "react";
+import { changeNick, changeEmail, changePassword, deleteAccount, getProviders, linkSocial, unlinkSocial } from "../auth.js";
 
 const ERR = {
   bad_nick: "닉네임은 2~12자로 써 주세요.", nick_taken: "이미 쓰고 있는 닉네임이에요.", bad_email: "이메일 형식이 맞지 않아요.", bad_password: "비밀번호는 6자 이상이어야 해요.",
-  wrong_login: "비밀번호가 맞지 않아요.", too_many: "잠시 뒤에 다시 해 주세요.", mail_failed: "인증 메일을 보내지 못했어요. 잠시 뒤에 다시 시도해 주세요.", network: "서버에 닿지 못했어요.",
+  need_password: "비밀번호를 먼저 만들어 주세요. 로그인할 방법이 없어지면 안 돼요.", already_linked: "이미 연결되어 있어요.", wrong_login: "비밀번호가 맞지 않아요.", too_many: "잠시 뒤에 다시 해 주세요.", mail_failed: "인증 메일을 보내지 못했어요. 잠시 뒤에 다시 시도해 주세요.", network: "서버에 닿지 못했어요.",
 };
 const SOCIAL = { google: "Google" };
 
@@ -21,6 +21,8 @@ export default function AccountScreen({ user, sync, onUser, onBack, onLogout, on
   const [busy, setBusy] = useState("");
   const say = (k, kind, text) => setMsg((m) => ({ ...m, [k]: [kind, text] }));
   const run = async (k, fn) => { setBusy(k); try { await fn(); } catch (e) { say(k, "err", ERR[e.message] || "잠시 뒤에 다시 해 주세요."); } setBusy(""); };
+  const [avail, setAvail] = useState([]);   // 서버에서 켜 둔 소셜 로그인
+  useEffect(() => { getProviders().then((r) => r && setAvail(r.providers)); }, []);
   const toggle = (k) => setOpen((o) => (o === k ? "" : k));
 
   const saveNick = () => run("nick", async () => { const r = await changeNick(nick.trim()); onUser(r.user); say("nick", "ok", "닉네임을 바꿨어요."); setOpen(""); });
@@ -33,6 +35,11 @@ export default function AccountScreen({ user, sync, onUser, onBack, onLogout, on
   const savePw = () => run("pw", async () => {
     if (pw.next !== pw.again) return say("pw", "err", "새 비밀번호가 서로 달라요.");
     await changePassword(pw.cur, pw.next); onUser({ ...user, hasPassword: true }); setPw({ cur: "", next: "", again: "" }); say("pw", "ok", "비밀번호를 바꿨어요. 다른 기기는 로그아웃돼요."); setOpen("");
+  });
+  const link = (p) => run("social", async () => { const r = await linkSocial(p); window.location.href = r.url; });         // 구글 화면으로 갔다가 돌아오면 연결이 끝난다
+  const unlink = (p) => run("social", async () => {
+    if (!window.confirm(`${SOCIAL[p] || p} 로그인 연결을 해제할까요? 닉네임과 비밀번호로는 계속 들어올 수 있어요.`)) return;
+    const r = await unlinkSocial(p); onUser(r.user); say("social", "ok", "연결을 해제했어요.");
   });
   const remove = () => run("del", async () => {
     if (!window.confirm("정말 계정을 지울까요? 서버에 보관된 진행과 편지함이 모두 사라지고 되돌릴 수 없어요.")) return;
@@ -78,6 +85,18 @@ export default function AccountScreen({ user, sync, onUser, onBack, onLogout, on
           <Field label="새 비밀번호 (6자 이상)" type="password" value={pw.next} maxLength={64} autoComplete="new-password" onChange={(e) => setPw({ ...pw, next: e.target.value })} />
           <Field label="새 비밀번호 한 번 더" type="password" value={pw.again} maxLength={64} autoComplete="new-password" onChange={(e) => setPw({ ...pw, again: e.target.value })} />
           <div className="auth-actions end"><button className="auth-btn" disabled={busy === "pw" || pw.next.length < 6 || (user.hasPassword && !pw.cur)} onClick={savePw}>{user.hasPassword ? "바꾸기" : "만들기"}</button></div>
+        </>)}
+
+        {(avail.length > 0 || user.providers.length > 0) && row("social", "연결된 로그인", user.providers.length ? user.providers.map((p) => SOCIAL[p] || p).join(", ") : "없음", <>
+          {[...new Set([...avail, ...user.providers])].map((p) => (
+            <div className="auth-actions" key={p}>
+              <span>{SOCIAL[p] || p} {user.providers.includes(p) ? "연결됨" : "연결 안 됨"}</span>
+              {user.providers.includes(p)
+                ? <button className="auth-link danger" disabled={busy === "social"} onClick={() => unlink(p)}>연결 해제</button>
+                : <button className="auth-btn" disabled={busy === "social"} onClick={() => link(p)}>{SOCIAL[p] || p}로 연결</button>}
+            </div>
+          ))}
+          {!user.hasPassword && user.providers.length > 0 && <p className="acct-help">비밀번호가 없어서 해제할 수 없어요. 위의 '비밀번호'에서 먼저 만들어 주세요.</p>}
         </>)}
 
         {row("del", "계정 삭제", "", <>

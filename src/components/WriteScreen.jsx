@@ -25,6 +25,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
   const [blockedMsg, setBlockedMsg] = useState("");      // 보낼 수 없는 표현이 있을 때 안내
   const [rec, setRec] = useState(null);                   // 녹음 중이면 { sec }
   const [voice, setVoice] = useState(null);               // 녹음한 목소리 { url, seconds }
+  const [consent, setConsent] = useState(false);          // 녹음을 서버에 올려 링크를 가진 사람이 듣는 것에 동의했는가
   const [micErr, setMicErr] = useState("");
   const stage = useRef(null);
   const ctl = useRef(null);
@@ -36,6 +37,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
   const picked = CONCEPTS.find((c) => c.id === scene);
 
   const record = async () => {
+    if (!consent) return;
     setMicErr("");
     try {
       ctl.current = await startRecording(MAX_VOICE_SEC, (sec) => setRec({ sec }));
@@ -54,7 +56,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
     } catch { /* 검사 서버에 못 닿아도 보내기는 계속한다 */ } finally { setChecking(false); }
     const payload = {
       mode: "link", tos: names, to: names.length > 1 ? `${names[0]} 외 ${names.length - 1}명` : names[0],
-      fromName: myName || "누군가", expireDays: 30, paper, body: body.trim(), gap: 2, scene, voice,
+      fromName: myName || "누군가", expireDays: 30, paper, body: body.trim(), gap: 2, scene, voice: consent ? voice : null,
     };
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (calm) return onSubmit(payload);
@@ -116,7 +118,7 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
             </div>
             <div className="wt-voice">
               {!rec ? (
-                <button className="btn ghost" onClick={record}><Icon name="mic" size={18} />{voice ? "다시 녹음하기" : "내 목소리 녹음하기"}</button>
+                <button className="btn ghost" disabled={!consent} title={consent ? "" : "아래 동의에 체크하면 녹음할 수 있어요"} onClick={record}><Icon name="mic" size={18} />{voice ? "다시 녹음하기" : "내 목소리 녹음하기"}</button>
               ) : (
                 <button className="btn rec" onClick={() => ctl.current?.stop()}><Icon name="stop" size={18} />{rec.sec.toFixed(0)}초 · 멈추기</button>
               )}
@@ -128,6 +130,10 @@ export default function WriteScreen({ myName = "", orbsTotal = 0, onSubmit, onBa
               )}
               <button className="btn ghost" onClick={() => setPreview(true)}><Icon name="play" size={18} />미리 보기</button>
             </div>
+            <label className="wt-consent">
+              <input type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); if (!e.target.checked) setVoice(null); }} />
+              <span>내 목소리를 서버에 올려, <b>편지 링크를 가진 사람이 들을 수 있다</b>는 점에 동의해요. 편지 보관 기간이 끝나거나 편지를 거두면 지워져요. <a href="/privacy#voice" target="_blank" rel="noopener">자세히 보기</a></span>
+            </label>
             <p className="wt-hint small">{micErr || `해무가 날아와 편지를 건네고, 내 목소리(선택, 최대 ${MAX_VOICE_SEC}초)에 맞춰 친구들이 노래해요. 녹음은 받는 사람에게 전해지고, 편지를 회수하거나 보관 기간(30일)이 지나면 함께 지워져요. 녹음이 없으면 기본 노래가 나와요.`}</p>
           </section>
 
