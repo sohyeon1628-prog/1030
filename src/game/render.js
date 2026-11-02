@@ -361,6 +361,12 @@ function practiceLabels(ctx, F, camX, sy) {
 // 하늘길: 구름으로 이어진 길. 구멍 자리는 끊겨 있고, 낮은 먹구름 덩어리가 놓여 있다.
 // 귀여운 해적: 구름 길을 이쪽으로 뛰어온다. 큰 머리에 검은 모자, 눈가리개, 줄무늬 옷, 칼. 뛰어서 넘어야 한다.
 function pirate(ctx, cx, baseY, t) {
+  const sp = getSprite("pirate", (t * 13 + cx * 0.05) / (Math.PI * 2));               // 3D 해적(머리가 +x): 왼쪽으로 뒤집어 이쪽을 보고 달려오게 한다
+  if (sp) {
+    ctx.save(); ctx.fillStyle = "rgba(20,80,120,.18)"; path(ctx, () => ctx.ellipse(cx, baseY + 4, 30, 6, 0, 0, Math.PI * 2)); ctx.fill();
+    ctx.translate(cx, baseY); ctx.scale(-1, 1); ctx.drawImage(sp.img, -sp.w / 2, -sp.h + 12, sp.w, sp.h); ctx.restore();
+    return;
+  }
   const ph = t * 13 + cx * 0.05, bob = Math.abs(Math.sin(ph)) * 7, y = baseY - bob;
   ctx.save();
   ctx.fillStyle = "rgba(20,80,120,.18)"; path(ctx, () => ctx.ellipse(cx, baseY + 4, 30, 6, 0, 0, Math.PI * 2)); ctx.fill();
@@ -414,7 +420,7 @@ function skyRoad(ctx, F, camX, sy, W) {
   if (F.mode === "fly") for (const o of w.obs) {
     const ahead = o.x - F.x;
     if (ahead < 40 || ahead > 340 || o.passed) continue;
-    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "pirate" ? ahead < 250 : ahead < 210;       // 이때부터 누르면 된다
+    const x = o.x - camX, bob = Math.sin(F.t * 9) * 4, hot = o.kind === "pirate" ? ahead < 300 : ahead < 210;       // 이때부터 누르면 된다
     ctx.save(); ctx.globalAlpha = hot ? 0.95 : 0.55; ctx.textAlign = "center";
     const y = sy(WALK_TOP + (o.kind === "pirate" ? o.h + 30 : 8)) - 46 + bob;
     path(ctx, () => { ctx.moveTo(x - 12, y); ctx.lineTo(x + 12, y); ctx.lineTo(x, y + 14); ctx.closePath(); }); ctx.fillStyle = hot ? "#e8553a" : "#ffffff"; ctx.fill();
@@ -696,7 +702,7 @@ export function drawFlight(ctx, F) {
     rr(ctx, W / 2 - 150, 150, 300, 14, 7, "rgba(31,74,99,.2)");
     rr(ctx, W / 2 - 150, 150, Math.max(8, 300 * g), 14, 7, col);
     ctx.font = `22px ${SANS}`; ctx.textAlign = "center";
-    outlined(ctx, low ? (F.touch ? "버튼 연타! 연타!" : "Enter 연타! 연타!") : (F.touch ? "왼쪽 아래 버튼을 연달아 눌러 버텨요" : "Enter를 연달아 눌러 버텨요"), W / 2, 188);
+    outlined(ctx, low ? (F.touch ? "버튼 연타! 연타!" : "Enter 연타! 연타!") : (F.touch ? "왼쪽 아래 버튼을 연달아 눌러 동그라미를 채워요" : "Enter를 연달아 눌러 동그라미를 채워요"), W / 2, 188);
     ctx.restore();
   }
 

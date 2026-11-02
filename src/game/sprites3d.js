@@ -116,6 +116,43 @@ function tornado(phase) {
   return g;
 }
 
+// 귀여운 해적(구름 길을 뛰어오는 장애물): 큰 머리, 삼각 모자와 해골 표시, 눈가리개, 줄무늬 옷, 칼. 오른쪽(+x)을 보고 달린다. 발은 y=-46 근처.
+function pirate(phase) {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  body.position.y = Math.abs(Math.sin(phase)) * 4;                                  // 달리며 통통 뛴다
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(14, 15, 28, 24), M("#fff6e6")); torso.position.y = -2; torso.scale.z = 0.95; body.add(torso);
+  for (const y of [-10, -2, 6]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(15.4, 15.8, 4.5, 24), M("#4a7cc9")); b.position.y = y; b.scale.z = 0.95; body.add(b); }
+  const belt = new THREE.Mesh(new THREE.CylinderGeometry(15.8, 15.8, 4, 24), M("#6b4a2e")); belt.position.y = -14; belt.scale.z = 0.95; body.add(belt);
+  body.add(S(17, "#f2c9a0", 1, 1, 1, 2, 27, 0));                                    // 머리
+  const hat = new THREE.Mesh(new THREE.ConeGeometry(16, 13, 22), M("#222a3a")); hat.position.set(2, 46, 0); body.add(hat);
+  body.add(S(21, "#222a3a", 1, 0.2, 1, 2, 40, 0));                                  // 모자 챙
+  body.add(S(3.4, "#ffffff", 1, 1.2, 0.5, 15, 44, 0));                              // 해골 표시
+  for (const z of [-1, 1]) body.add(S(2.6, "#222a3a", 0.9, 1.2, 0.9, 18.5, 28, z * 7));    // 눈(한쪽은 눈가리개가 덮는다)
+  body.add(S(1.1, "#ffffff", 1, 1, 1, 20.2, 29.2, -6));
+  body.add(S(6.5, "#222a3a", 0.5, 1, 1, 17.5, 28.5, 7));                            // 눈가리개
+  const band = new THREE.Mesh(new THREE.TorusGeometry(17, 0.9, 8, 28), M("#222a3a")); band.position.set(2, 30, 0); band.rotation.x = Math.PI / 2 + 0.25; body.add(band);
+  for (const z of [-1, 1]) body.add(S(3.6, "#f59ab0", 0.6, 1, 1, 15, 21, z * 10.5, { transparent: true, opacity: 0.75 }));   // 볼
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.9, 8, 14, Math.PI), M("#7a3b2e")); mouth.position.set(18.5, 20, 0); mouth.rotation.set(0, Math.PI / 2, Math.PI); body.add(mouth);
+  const arm = (z, swing, raised) => {                                               // 팔: 칼 든 팔은 앞으로 치켜든다
+    const a = new THREE.Group(); a.position.set(2, 8, z * 16);
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(3.6, 15, 6, 12), M(raised ? "#fff6e6" : "#fff6e6")); limb.position.y = -9; a.add(limb);
+    a.add(S(4.2, "#f2c9a0", 1, 1, 1, 0, -20, 0));
+    if (raised) { const sw = new THREE.Mesh(new THREE.BoxGeometry(3, 26, 1.6), M("#cfd8e2", { metalness: 0.5, roughness: 0.3 })); sw.position.y = -33; a.add(sw); const gd = new THREE.Mesh(new THREE.BoxGeometry(10, 2.4, 3), M("#e8b04a")); gd.position.y = -21; a.add(gd); }
+    a.rotation.z = raised ? 2.35 + Math.sin(phase) * 0.12 : swing; a.rotation.x = z * 0.15;
+    return a;
+  };
+  body.add(arm(1, 0, true)); body.add(arm(-1, Math.sin(phase) * 0.9 - 0.2, false));
+  for (const side of [-1, 1]) {                                                     // 다리: 번갈아 앞뒤로
+    const leg = new THREE.Group(); leg.position.set(0, -15 + body.position.y * 0, side * 7);
+    const sw = Math.sin(phase + (side > 0 ? 0 : Math.PI));
+    leg.rotation.z = sw * 0.95;
+    const l = new THREE.Mesh(new THREE.CapsuleGeometry(4.6, 12, 6, 12), M("#3d4a6b")); l.position.y = -11; leg.add(l);
+    leg.add(S(6.6, "#3b2a22", 1.45, 0.8, 1, 4, -27, 0));
+    g.add(leg);
+  }
+  return g;
+}
+
 function shoot(model, w, h, oy = 0, view = [0.32, -0.5], k = 1) {
   if (!setup()) return null;
   pose.rotation.set(view[0], view[1], 0); model.scale.setScalar(k);
@@ -135,6 +172,7 @@ const SPECS = {   // [가로, 세로, 프레임 수, 만드는 함수, 세로 �
   shark: () => [150, 96, 8, (i, n) => jumper("shark", Math.sin((i / n) * Math.PI * 2))],
   whale: () => [200, 118, 8, (i, n) => jumper("whale", Math.sin((i / n) * Math.PI * 2))],
   storm: () => [124, 90, 1, () => storm(), 0, [0.22, -0.2], 1.4],
+  pirate: () => [100, 116, 8, (i, n) => pirate((i / n) * Math.PI * 2), 0, [0.2, -0.45], 1],
   tornado: () => [150, 190, 8, (i, n) => tornado((i / n) * Math.PI * 2), r45, [0.18, 0]],
 };
 const r45 = 55 * 0.45;   // 회오리 상자의 가운데가 깔때기 위쪽에 오도록
@@ -156,4 +194,4 @@ export function getSprite(kind, frameT = 0) {
 }
 
 // 비행을 시작하기 전에 미리 그려 두어, 처음 장애물이 나올 때 끊기지 않게 한다
-export function warmSprites() { ["bird:blue", "bird:dark", "plane", "shark", "whale", "storm", "tornado"].forEach((k) => getSprite(k)); }
+export function warmSprites() { ["bird:blue", "bird:dark", "plane", "shark", "whale", "storm", "tornado", "pirate"].forEach((k) => getSprite(k)); }

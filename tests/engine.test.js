@@ -100,8 +100,8 @@ function jumpAt(kind, d, seed) {
   }
   return { hits: F.totalHits, minWalk };
 }
-test("하늘길: 알맞은 때(해적 앞 100~180px, 구멍 앞 100~180px)에 누르면 해적과 구멍을 모두 넘는다", () => {
-  for (const [kind, ds] of [["pirate", [100, 140, 180]], ["gap", [100, 140, 180]]]) for (const d of ds) for (let s = 0; s < 8; s++) {
+test("하늘길: 알맞은 때(해적 앞 100~280px, 구멍 앞 100~180px)에 누르면 해적과 구멍을 모두 넘는다", () => {
+  for (const [kind, ds] of [["pirate", [100, 200, 280]], ["gap", [100, 140, 180]]]) for (const d of ds) for (let s = 0; s < 8; s++) {
     const r = jumpAt(kind, d, s); if (!r) continue;
     assert.equal(r.hits, 0, `${kind} ${d}px 시드${s}에서 부딪혔다`);
   }
@@ -146,4 +146,15 @@ test("비바람 구간: 연타하면 버티고, 연타하지 않으면 날개에
   assert.equal(good.inStormEvents, 0); assert.ok(good.maxPush > 0.5, "비바람 구간에서 느려진다");
   assert.ok(good.minY > 200, `연타하면 줄 높이를 유지한다(${good.minY})`);
   assert.ok(idle.minY < 150 && idle.hits > good.hits, `연타하지 않으면 아래로 떨어진다(${idle.minY}, 하트 ${idle.hits})`);
+});
+
+test("비바람 버티기: 동그라미(게이지)를 가득 채우면 비바람이 걷히고 버티기가 끝난다", () => {
+  const F = createFlight(letter(1, false, "storm1"), true, false); F.viewW = 800; let t = 0, tap = 0, done = false;
+  const [a, b] = F.lv.rain[0];
+  while (!F.finished && t < 200 && F.x < b * LEN) {
+    if (F.mode === "fly" && F.brace.on) { tap += 8 / 60; while (tap >= 1) { F.braceTaps++; tap--; } }
+    stepFlight(F, 1 / 60, {}); t += 1 / 60;
+    if (F.stormDone[0]) { done = true; assert.equal(F.brace.on, false); assert.ok(F.x < b * LEN); break; }
+  }
+  assert.ok(done && F.x > a * LEN, "게이지를 채워도 버티기가 끝나지 않았다");
 });

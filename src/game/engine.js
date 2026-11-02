@@ -1,7 +1,7 @@
 import { LEN, LAND_Y, R, SX, VX_PRACTICE, LANE_Y, LANE_TAU, MAX_HITS, INV, COMBO_SHIELD, JUMP_T, JUMP_SPAN, GROUND_Y, TAKEOFF, WALK_Y, WALK_JUMP, WALK_JUMP_T, LAND_P, CALM_DIST, GUARD_T, UMBRELLA_T } from "./constants.js";
 import { buildLevel, buildPracticeLevel, guide, clamp, speedAt } from "./level.js";
 
-const PIRATE_V = 90, PIRATE_SEE = 520;   // 해적이 뛰어오는 속도(px/초)와, 우체부가 이만큼 가까워지면 뛰기 시작하는 거리
+const PIRATE_V = 170, PIRATE_SEE = 520;   // 해적이 뛰어오는 속도(px/초)와, 우체부가 이만큼 가까워지면 뛰기 시작하는 거리
 export function createFlight(letter, tutorialSeen, practice = false) {
   return {
     letter,
@@ -27,7 +27,7 @@ export function createFlight(letter, tutorialSeen, practice = false) {
     pop: null,                         // 아이템을 얻은 순간의 효과 { kind, t }
     vx: 0,                             // 지금 전진 속도(속도선 연출에 쓴다)
     combo: 0, bestCombo: 0, comboT: 0, // 연속으로 피한 사고 수, 콤보 표시 남은 시간
-    braceTaps: 0, brace: { on: false, g: 0.6 },   // 비바람 버티기: Enter 연타 횟수, 게이지(0~1)
+    braceTaps: 0, brace: { on: false, g: 0.6 }, stormDone: {},   // 비바람 버티기: Enter 연타 횟수, 게이지(0~1)
     walkK: 0, jumpT: 0,                // 하늘길: 걷는 자세 정도(0~1), 공중에 떠 있으면 1
     onRoad: false, wy: 0, wvy: 0, airborne: false, groundH: 0,   // 하늘길: 길에 내려앉았는가, 길(또는 블록) 위로 뜬 높이와 속도, 발밑 높이
     calm: false, calmDone: false,      // 도착 2초 전부터는 장애물이 없다
@@ -121,7 +121,8 @@ export function stepFlight(F, dt, fx) {
   }
 
   // 비: 내리는 동안 날개가 젖어 줄을 옮기는 것이 느려진다(우산이 있으면 괜찮다). 가끔 천둥이 번쩍인다.
-  const raining = F.lv.rain.some(([a, b]) => p >= a && p < b);
+  const stormIdx = F.lv.rain.findIndex(([a, b], i) => p >= a && p < b && !F.stormDone[i]);   // 버티기를 끝낸 구간은 비바람이 걷힌다
+  const raining = stormIdx >= 0;
   F.rainK += ((raining ? 1 : 0) - F.rainK) * (1 - Math.exp(-dt / 0.8));
   if (raining && F.hintsOn && !F.hinted.r) { F.hinted.r = true; say(F, "비가 내려요! 날개가 젖어 줄 옮기기가 느려져요", 3.4); }
   if (raining && Math.random() < dt * 0.25) F.flash = 0.3;
@@ -215,7 +216,8 @@ export function stepFlight(F, dt, fx) {
     const B = F.brace;
     if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, F.touch ? "왼쪽 아래 버튼을 연달아 눌러 게이지를 채워요!" : "Enter를 연달아 눌러 게이지를 채워요!", 3.2); } }
     B.g = clamp(B.g + taps * 0.11 - dt * (0.26 + 0.03 * ws) * (F.umbrella > 0 && raining ? 0.7 : 1), 0, 1);
-    if (B.g <= 0) { B.g = 0.5; say(F, "날개에 힘이 빠져 떨어졌어요! 더 빨리 눌러요", 1.8); fx.splash?.(); if (hit()) return; }
+    if (B.g >= 1) { F.stormDone[stormIdx] = true; B.on = false; B.g = 0.6; say(F, "버텼어요! 비바람이 걷혔어요", 2.2); fx.land?.(); }
+    else if (B.g <= 0) { B.g = 0.5; say(F, "날개에 힘이 빠져 떨어졌어요! 더 빨리 눌러요", 1.8); fx.splash?.(); if (hit()) return; }
   } else F.brace.on = false;
 
   // 하늘길의 장애물: 해적은 뛰어 넘고, 구멍은 뛰어 건넌다
