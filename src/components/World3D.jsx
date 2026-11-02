@@ -380,7 +380,6 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
       <button ref={(n) => (labels.current[letters.length] = n)} className={`pin post ${postOpen ? "target" : "locked"}`} disabled={!postOpen} onClick={() => onPost?.()}
         aria-label={postOpen ? "편지섬: 내 편지 쓰기" : "편지섬: 네 통의 편지를 모두 전하면 열려요"}>
         <span className="pin-ico"><Icon name={postOpen ? "pen" : "lock"} size={postOpen ? 22 : 13} /></span>
-        <span className="pin-tip">편지섬<small>{postOpen ? "내 편지 쓰기" : "네 통을 모두 전하면 열려요"}</small></span>
       </button>
     </div>
   );
