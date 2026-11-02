@@ -153,7 +153,7 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     // 우체부는 편지를 전한 마지막 섬에 서 있다(처음에는 출발 섬). 새 편지를 전해 다리가 놓이면, 다리가 완성된 뒤에 하늘로 날아올라 그 섬으로 건너간다.
     const cur = Math.min(delivered, ISLANDS.length - 1), fromAt = pmAt ?? cur;
     pmAt = cur;
-    const trip = fromAt !== cur ? { a: ISLANDS[fromAt], b: ISLANDS[cur], t0: null, dur: 3.6, wait: seen < delivered ? 4.2 : 0.6 } : null;
+    const trip = fromAt !== cur ? { a: ISLANDS[fromAt], b: ISLANDS[cur], t0: null, dur: 2.6, wait: seen < delivered ? 1.6 : 0.6 } : null;
     pm.position.set(ISLANDS[fromAt].x, 2.5, ISLANDS[fromAt].z); world.add(pm);
     const fogs = [], pops = [], bridgesAnim = [], bridgeSegs = [];
     // 아직 열리지 않은 구역을 빈틈없이 덮는 안개: 두 겹(낮은 층 + 높은 층)을 엇갈리게 깔고, 이미 걷힌 곳은 만들지 않는다.
@@ -176,13 +176,13 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     for (let k = 1; k <= 4; k++) {                                // 배달을 마친 섬: 땅이 넓어진다
       if (delivered < k) continue;
       const ex = makeExtras(); ex.position.set(ISLANDS[k].x, 0, ISLANDS[k].z);
-      if (seen < k) popIn(ex, 3.2); else world.add(ex);
+      if (seen < k) popIn(ex, 1.4); else world.add(ex);
     }
     for (let i = 0; i < 4; i++) {                                 // 이어지는 다리 + 중간의 작은 땅
       if (!grades[letters[i].id]) continue;
       const br = makeBridge(ISLANDS[i], ISLANDS[i + 1]); world.add(br.group);
       bridgeSegs.push({ a: ISLANDS[i], b: ISLANDS[i + 1] });
-      if (i >= seen) { br.items.forEach((m) => m.scale.setScalar(0.001)); bridgesAnim.push({ items: br.items, delay: 3.4 }); }
+      if (i >= seen) { br.items.forEach((m) => m.scale.setScalar(0.001)); bridgesAnim.push({ items: br.items, delay: 0.4 }); }
     }
     if (postOpen) {                                              // 편지섬이 열리면 마지막 이야기 섬에서 다리로 이어진다
       const br = makeBridge(ISLANDS[4], POST_ISLAND); world.add(br.group);
@@ -191,7 +191,7 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     ISLETS.forEach((l) => {                                      // 걷힌 자리에 솟아난 작은 섬
       if (delivered < l.thr) return;
       const it = makeIslet(); it.position.set(l.x, 0, l.z);
-      if (seen < l.thr) popIn(it, 3.6 + (l.x % 1) * 0.4); else world.add(it);
+      if (seen < l.thr) popIn(it, 2.2 + (l.x % 1) * 0.4); else world.add(it);
     });
 
     const resize = () => {
