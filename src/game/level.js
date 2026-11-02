@@ -85,7 +85,17 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   ];
 
   // 사고는 도착 2초 전(착륙 직전)보다 훨씬 앞에서 끝난다: 마지막 사고의 위험이 사라지는 자리까지 계산해 0.78에서 멈춘다
+  // 비바람 구간: 위치로 정해진다(약 5초 동안 천천히 나아가며 버텨야 한다). 바람이 거센 편지일수록 자주 온다. 도착 2초 전(0.86)보다 먼저 그친다.
+  // 비바람 구간과 그 앞(150px)·뒤(650px)에는 장애물이 없다: 버티는 동안 새나 번개가 날아오지 않고, 구간이 끝난 뒤의 경고도 구간 안에서 시작하지 않는다.
+  const rain = [];
+  {
+    const slots = ws === 1 ? [0.22] : ws === 2 ? [0.16, walk ? 0.76 : 0.58] : [0.14, 0.34, 0.76];
+    slots.forEach((base) => { const a = base + rnd() * 0.03, b = Math.min(a + 0.06 + rnd() * 0.02, 0.84); rain.push([a, b]); });
+  }
+  const inStorm = (x, before = 150, after = 650) => rain.some(([a, b]) => x > a * LEN - before && x < b * LEN + after);
+
   for (let x = 0.07 * LEN; x < 0.78 * LEN;) {
+    if (inStorm(x)) { const st = rain.find(([a, b]) => x > a * LEN - 150 && x < b * LEN + 650); x = st[1] * LEN + 650; continue; }       // 비바람 구간 앞뒤는 비워 둔다
     if (walk && x > walk.a - 1000 && x < walk.b + 100) { x = walk.b + 400; continue; }
     const p = x / LEN;
     const pool = patterns.filter((q) => p >= q.min);
@@ -98,21 +108,11 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
     const base = lerp(620, 360, p) - ws * 25;
     x += base * (rnd() < 0.2 ? 0.45 : 0.7 + rnd() * 0.9);
   }
-  // 비: 바람이 거센 편지일수록 자주, 오래 내린다. 시작 자리는 매번 다르다.
-  // 하늘길이 있으면 그 구간을 비켜 앞·뒤에 나눠 내린다. 모든 비는 도착 2초 전(0.86)보다 먼저 그친다.
-  const rain = [];
-  for (let i = 0; i < ws; i++) {
-    const base = walk ? [0.12, 0.32, 0.73][i] : 0.12 + i * 0.25, a = base + rnd() * 0.08;
-    let b = a + 0.08 + 0.04 * ws * rnd();
-    b = Math.min(b, 0.84, walk && i === 1 ? 0.48 : 1);
-    rain.push([a, b]);
-  }
-
-  // 하늘길의 장애물: 낮은 먹구름 덩어리(위로 넘는다)와 구름 길의 구멍(뛰어 건넌다)
+  // 하늘길: 뛰어올라 위를 걸을 수 있는 구름 블록(옆으로 부딪히면 아프다)과 구름 길의 구멍(뛰어 건넌다)
   if (walk) {
     let k = 0;
     for (let x = walk.a + 560; x < walk.b - 380; x += 470 + rnd() * 200, k++) {
-      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "puff", x, w: 60, h: 50, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
+      walk.obs.push(k % 2 === 0 || rnd() < 0.35 ? { kind: "block", x, w: 180, h: k % 4 === 0 ? 56 : 92, passed: false } : { kind: "gap", x, w: 120, h: 0, passed: false });
     }
   }
 
@@ -129,9 +129,9 @@ export function buildLevel(letter, seed = `${letter.id}:${Date.now()}:${Math.ran
   for (let g = 0; g < 3; g++) {                                  // 기억 구슬: 세 개씩 세 무리, 자리는 매번 다르다
     let l = -1;
     const x0 = (0.16 + g * 0.22 + rnd() * 0.08) * LEN;
-    if (walk && g === 1 && walk.obs.length) {                    // 하늘길에서는 구름 덩어리 위로 뛰어올라 모은다
-      const o = walk.obs[Math.min(1, walk.obs.length - 1)];
-      for (let k = -1; k <= 1; k++) items.push({ kind: "orb", x: o.x + k * 60, lane: 1, y: WALK_Y + 95, taken: false });
+    if (walk && g === 1 && walk.obs.length) {                    // 하늘길에서는 구름 블록 위에 구슬이 떠 있어서, 올라가 걸으며 모은다
+      const o = walk.obs.find((q) => q.kind === "block") || walk.obs[0];
+      for (let k = -1; k <= 1; k++) items.push({ kind: "orb", x: o.x + k * 34, lane: 1, y: WALK_Y + o.h + 42, taken: false });
       continue;
     }
     for (let k = 0; k < 3; k++) l = put("orb", x0 + k * 110, l);

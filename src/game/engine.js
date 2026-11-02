@@ -27,7 +27,8 @@ export function createFlight(letter, tutorialSeen, practice = false) {
     vx: 0,                             // 지금 전진 속도(속도선 연출에 쓴다)
     combo: 0, bestCombo: 0, comboT: 0, // 연속으로 피한 사고 수, 콤보 표시 남은 시간
     braceTaps: 0, brace: { on: false, g: 0.6 },   // 비바람 버티기: Enter 연타 횟수, 게이지(0~1)
-    walkK: 0, jumpT: 0,                // 하늘길: 걷는 자세 정도(0~1), 뛰는 중 남은 시간
+    walkK: 0, jumpT: 0,                // 하늘길: 걷는 자세 정도(0~1), 공중에 떠 있으면 1
+    onRoad: false, wy: 0, wvy: 0, airborne: false, groundH: 0,   // 하늘길: 길에 내려앉았는가, 길(또는 블록) 위로 뜬 높이와 속도, 발밑 높이
     calm: false, calmDone: false,      // 도착 2초 전부터는 장애물이 없다
   };
 }
@@ -50,7 +51,7 @@ function restart(F) {
   for (const b of F.lv.bolts) { b.state = "idle"; b.t = 0; }
   for (const it of F.lv.items) if (it.x >= F.x) it.taken = false;      // 되돌아간 구간의 아이템은 다시 나타난다
   F.rainK = 0; F.flash = 0; F.combo = 0;
-  F.brace.on = false; F.brace.g = 0.6; F.braceTaps = 0; F.walkK = 0; F.jumpT = 0; F.jumpBuf = 0;
+  F.brace.on = false; F.brace.g = 0.6; F.braceTaps = 0; F.walkK = 0; F.jumpT = 0; F.jumpBuf = 0; F.onRoad = false; F.wy = 0; F.wvy = 0; F.airborne = false; F.groundH = 0;
   for (const o of F.lv.walk?.obs || []) o.passed = false;
 }
 
@@ -97,7 +98,7 @@ export function stepFlight(F, dt, fx) {
   // 줄 옮기기: 위·아래로 한 줄씩. 회오리 안에서는 반대로 움직인다.
   const flip = F.rev > 0 ? -1 : 1;
   for (const m of F.moves.splice(0)) {
-    if (inZone) { if (m > 0) F.jumpBuf = 0.3; }                                              // 하늘길에서는 ↑ = 폴짝(땅에 닿기 전에 눌러도 0.3초 동안 기억해 두었다가 뛴다)
+    if (inZone) F.jumpBuf = 0.3;                                                             // 하늘길에서는 줄 옮기기가 없으니 위·아래 어느 쪽을 눌러도(터치는 화면 아무 곳이나) 폴짝. 땅에 닿기 전에 눌러도 0.3초 동안 기억해 둔다
     else F.lane = clamp(F.lane + m * flip, 0, 2);
   }
 
@@ -129,37 +130,44 @@ export function stepFlight(F, dt, fx) {
   const lifting = F.lift < 1;
   if (lifting) F.lift = Math.min(1, F.lift + dt / TAKEOFF);
   const auto = p >= 0.76;
-  if (inZone) { F.lane = 1; F.jumpT = Math.max(0, F.jumpT - dt); F.jumpBuf = Math.max(0, (F.jumpBuf || 0) - dt); } else { F.jumpT = 0; F.jumpBuf = 0; }
-  // 길 위에 있는 동안(뛰어올라 공중에 있는 동안도 포함)은 걷는 자세로 본다. 공중에서 걷는 자세가 풀리면 점프 높이가 틀어진다.
-  F.walkK += ((inZone && (F.jumpT > 0 || Math.abs(F.y - WALK_Y) < 16) ? 1 : 0) - F.walkK) * (1 - Math.exp(-dt / 0.12));
-  if (inZone && F.jumpBuf > 0 && F.jumpT <= 0 && F.walkK > 0.8) { F.jumpT = WALK_JUMP_T; F.jumpBuf = 0; fx.jump?.(); }
+  // 하늘길: 구름 길 위를 걷고, ↑로 뛰어 구멍을 건너거나 구름 블록 위로 올라가 그 위를 걸을 수 있다.
+  // wy = 길 위로 뜬 높이. 발밑(블록 윗면)보다 위에서 내려올 때만 블록이 받쳐 준다(옆으로 부딪히면 막힌다). 블록 끝을 벗어나면 아래로 떨어진다.
+  if (inZone) { F.lane = 1; F.jumpBuf = Math.max(0, (F.jumpBuf || 0) - dt); if (!F.onRoad && Math.abs(F.y - WALK_Y) < 16) F.onRoad = true; }
+  else { F.jumpBuf = 0; F.onRoad = false; F.wy = 0; F.wvy = 0; F.airborne = false; F.groundH = 0; }
+  if (inZone && F.onRoad) {
+    const support = (wy) => wk.obs.reduce((m, o) => (o.kind === "block" && Math.abs(F.x - o.x) < o.w / 2 && wy >= o.h - 2 ? Math.max(m, o.h) : m), 0);
+    const g = support(F.wy);
+    if (!F.airborne && F.wy > g + 0.5) F.airborne = true;                                  // 블록 끝을 벗어나면 떨어진다
+    if (F.jumpBuf > 0 && !F.airborne) { F.wvy = (4 * WALK_JUMP) / WALK_JUMP_T; F.airborne = true; F.jumpBuf = 0; fx.jump?.(); }
+    if (F.airborne) {
+      F.wvy -= ((8 * WALK_JUMP) / (WALK_JUMP_T * WALK_JUMP_T)) * dt; F.wy += F.wvy * dt;
+      if (F.wvy <= 0 && F.wy <= g) { F.wy = g; F.wvy = 0; F.airborne = false; }
+    } else F.wy = g;
+    F.groundH = g;
+  }
+  F.jumpT = F.airborne ? 1 : 0;
+  F.walkK += ((inZone && F.onRoad ? 1 : 0) - F.walkK) * (1 - Math.exp(-dt / 0.12));
+  if (F.jumpT === 0 && !inZone) F.wy = 0;
   const walking = inZone && F.walkK > 0.8;
-  const ju = 1 - F.jumpT / WALK_JUMP_T, jh = F.jumpT > 0 ? WALK_JUMP * 4 * ju * (1 - ju) : 0;
-  const target = inZone ? WALK_Y : auto ? guide(p) : LANE_Y[F.lane];
+  let target = inZone ? WALK_Y : auto ? guide(p) : LANE_Y[F.lane];
+  if (F.brace.on && !inZone && !auto) { const sink = clamp((0.55 - F.brace.g) / 0.55, 0, 1); target -= sink * (LANE_Y[F.lane] - 60); }   // 비바람을 버티지 못하면(연타를 안 하면) 날개에 힘이 빠져 아래로 떨어진다
   const tau = inZone ? 0.16 : auto ? 0.35 : LANE_TAU * (1 + 0.8 * F.rainK * (F.umbrella > 0 ? 0 : 1));
   const rise = clamp((F.lift - 0.2) / 0.8, 0, 1);
   F.land = clamp((p - 0.92) / 0.03, 0, 1);                                   // 착륙 직전부터 다리를 내려 발이 먼저 닿게 한다
-  const ny = lifting ? GROUND_Y + (target - GROUND_Y) * (1 - (1 - rise) ** 3) : walking ? WALK_Y + jh : F.y + (target - F.y) * (1 - Math.exp(-dt / tau));
+  const ny = lifting ? GROUND_Y + (target - GROUND_Y) * (1 - (1 - rise) ** 3) : walking ? WALK_Y + F.wy : F.y + (target - F.y) * (1 - Math.exp(-dt / tau));
   F.vy = (ny - F.y) / dt; F.y = ny;
   F.thrust = clamp(Math.abs(F.vy) / 500 + 0.3, 0, 1);              // 날개 퍼덕임 세기
 
-  // 바닷바람: 예고(0.7초) → 부는 동안 전진 속도가 줄어든다(멈추거나 뒤로 밀리지 않는다). 언제 불지는 매번 다르다. 순풍 리본이 있으면 영향이 없다.
+  // 비바람: 위치로 정해진 구간(level의 rain)에서 분다. 구간 직전에는 예고(windState "warn"), 구간 안에서는 비와 함께 바람(windState "blow")이 몰아친다.
+  // 비바람 구간에서는 천천히 나아가고(0.4배), 장애물은 날아오지 않는다. 순풍 리본이 있으면 영향이 없다.
   const ws = f.windStrength;
-  if (p >= 0.1 && p < 0.84 && !F.practice && !inZone && !calm) {
-    F.windT -= dt;
-    if (F.windState === "none" && F.windT <= 0) {
-      F.windState = "warn"; F.windT = 0.7;
-      if (!F.hinted.w) { F.hinted.w = true; say(F, F.touch ? "비바람이 몰려와요! 왼쪽 아래 버튼을 연달아 눌러 버텨요" : "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
-    } else if (F.windState === "warn" && F.windT <= 0) {
-      F.windState = "blow"; F.windT = 1.4 + 0.4 * ws + Math.random() * 1.0;
-    } else if (F.windState === "blow" && F.windT <= 0) {
-      F.windState = "none"; F.windT = 4 + Math.random() * (8 - ws);
-    }
-  } else F.windState = "none";
-  const slow = 0;                                          // 바람은 속도를 늦추지 않는다. 대신 Enter를 연타해 버텨야 한다(아래 버티기)
+  const nextStorm = !raining && !inZone && !calm && F.lv.rain.find(([a]) => p < a && p >= a - 0.035);
+  F.windState = raining && !inZone && !calm ? "blow" : nextStorm ? "warn" : "none";
+  if (nextStorm && !F.hinted.w) { F.hinted.w = true; say(F, F.touch ? "비바람이 몰려와요! 왼쪽 아래 버튼을 연달아 눌러 버텨요" : "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
+  const slow = F.windState === "blow" && F.ribbon <= 0 ? 0.6 : 0;
   F.windPush += (slow - F.windPush) * (1 - Math.exp(-dt / 0.25));
   const base = F.practice ? VX_PRACTICE : speedAt(p);                                           // 진행할수록 빨라진다(연습은 일정)
-  const vx = base * (F.ribbon > 0 ? 1.3 : 1) * (0.3 + 0.7 * F.lift) * (inZone ? 0.7 : 1);   // 이륙하며 속도가 붙는다
+  const vx = base * (F.ribbon > 0 ? 1.3 : 1) * (0.3 + 0.7 * F.lift) * (inZone ? 0.7 : 1) * (1 - F.windPush);   // 이륙하며 속도가 붙는다
   F.vx = vx;
   F.x = clamp(F.x + vx * dt, 0, LEN);
 
@@ -202,20 +210,20 @@ export function stepFlight(F, dt, fx) {
   // 비바람 버티기: 바람이 불거나 비가 내리는 동안 게이지가 줄어든다. Enter를 연달아 눌러 채우고, 다 닳으면 하트가 하나 줄어든다.
   // 속도는 줄지 않는다. 순풍 리본이 있으면 바람을 무시한다. 우산이 있으면 비에서 덜 줄어든다.
   const taps = F.braceTaps; F.braceTaps = 0;
-  const storm = !calm && !inZone && F.ribbon <= 0 && (F.windState === "blow" || raining);
+  const storm = !calm && !inZone && F.ribbon <= 0 && raining;
   if (storm) {
     const B = F.brace;
     if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, F.touch ? "왼쪽 아래 버튼을 연달아 눌러 게이지를 채워요!" : "Enter를 연달아 눌러 게이지를 채워요!", 3.2); } }
     B.g = clamp(B.g + taps * 0.11 - dt * (0.26 + 0.03 * ws) * (F.umbrella > 0 && raining ? 0.7 : 1), 0, 1);
-    if (B.g <= 0) { B.g = 0.5; say(F, "바람에 밀렸어요! 더 빨리 눌러요", 1.6); if (hit()) return; }
+    if (B.g <= 0) { B.g = 0.5; say(F, "날개에 힘이 빠져 떨어졌어요! 더 빨리 눌러요", 1.8); fx.splash?.(); if (hit()) return; }
   } else F.brace.on = false;
 
   // 하늘길의 장애물: 구름 덩어리는 뛰어 넘고, 구멍은 뛰어 건넌다
   if (inZone && F.walkK > 0.5) {
-    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "하늘길이에요! 구름과 구멍 앞에서 ‘점프!’ 표시가 빨개지면 ↑(휴대폰은 화면 위쪽)을 눌러 뛰어요", 3.6); }
+    if (!F.hinted.walk) { F.hinted.walk = true; say(F, "‘점프!’가 빨개지면 화면을 눌러요 (구름 블록 위도 걸어요)", 3.8); }
     for (const o of wk.obs) {
       const dx = Math.abs(F.x - o.x), dy = F.y - WALK_Y;
-      const bad = o.kind === "puff" ? dx < o.w / 2 + R * 0.4 && dy < o.h - 6 : dx < o.w / 2 - 14 && dy < 14;
+      const bad = o.kind === "block" ? dx < o.w / 2 + R * 0.4 && dy < o.h - 6 : dx < o.w / 2 - 14 && dy < 14;
       if (bad && hit()) return;
       if (!o.passed && F.x - o.x > o.w / 2 + R) { o.passed = true; if (F.inv <= 0) dodged(); }
     }
@@ -229,6 +237,7 @@ export function stepFlight(F, dt, fx) {
     const ve = ev.kind === "plane" ? 820 : 560;
     const d = ev.x - F.x;
     if (ev.state === "idle") {
+      if (raining) continue;                                                   // 비바람 구간에서는 새·비행기·상어가 시작되지 않는다
       const lead = breach ? vx * (ev.warn + 0.85) : vx * ev.warn + (vx * span) / (vx + ve);
       if (d <= lead && d > -60) {
         ev.state = "tele"; ev.t = ev.warn; fx.warn?.();
@@ -283,7 +292,7 @@ export function stepFlight(F, dt, fx) {
   // 번개: 예고 → 내리침(0.5초). 내리치는 순간 우체부가 그 자리를 지나도록 지금 속도로 예고 시점을 맞춘다.
   for (const b of F.lv.bolts) {
     const d = b.x - F.x;
-    if (b.state === "idle" && d < vx * (b.warn + 0.12) && d > 0) {
+    if (b.state === "idle" && !raining && d < vx * (b.warn + 0.12) && d > 0) {
       b.state = "warn"; b.t = b.warn;
       if (F.hintsOn && !F.hinted.bolt) { F.hinted.bolt = true; say(F, "번개가 쳐요! 표시된 줄을 피하세요", 3.6); }
     } else if (b.state === "warn") {
