@@ -4,7 +4,7 @@ import { ISLANDS, POST_ISLAND, buildIsland, makeBridge, makePostman, animatePost
 
 // 첫 화면(3D): 구름 위를 해무와 내가 날아다니고, 그 아래로 마음의 섬들이 펼쳐져 보인다.
 // 아래쪽 버튼을 누르면 로그인(처음 온 사람) 또는 시작(이미 들어온 적 있는 사람)으로 넘어간다. 자동으로 넘어가지 않는다.
-export default function SplashScene({ label = "로그인하기", onLeave, onDone }) {
+export default function SplashScene({ label = "시작하기", onLeave, onDone }) {
   const wrap = useRef(null);
   const [leaving, setLeaving] = useState(false);
   const [fail, setFail] = useState(false);

@@ -36,7 +36,7 @@ export default function App() {
     const q = new URLSearchParams(location.search), h = new URLSearchParams(location.hash.replace(/^#/, ""));
     const out = { pwreset: q.get("pwreset") || "", notice: q.get("emailverified") === "1" ? "이메일 인증이 끝났어요." : q.get("emailverified") === "0" ? "인증 링크가 만료됐거나 이미 썼어요." : q.has("socialerror") ? "소셜 로그인에 실패했어요. 다시 시도해 주세요." : q.get("linked") === "1" ? "소셜 로그인을 연결했어요." : q.get("linked") === "0" ? "이미 다른 계정에 연결된 소셜 계정이에요." : "" };
     const tok = h.get("social");
-    if (tok && /^[A-Za-z0-9_-]{20,}$/.test(tok)) { setToken(tok); }
+    if (tok && /^[A-Za-z0-9_-]{20,}$/.test(tok)) { setToken(tok); out.social = true; }
     if (out.pwreset || out.notice || tok || [...q.keys()].some((k) => ["pwreset", "emailverified", "socialerror", "linked"].includes(k))) history.replaceState(null, "", location.pathname);
     return out;
   });
@@ -48,7 +48,7 @@ export default function App() {
     return s;
   });
   const home = state.storySeen ? "map" : "intro";
-  const [screen, setScreen] = useState(entry.pwreset ? "pwreset" : state.nickname ? home : "nickname");   // 재설정 링크면 새 비밀번호 화면, 닉네임이 없으면 먼저 정한다
+  const [screen, setScreen] = useState(entry.pwreset ? "pwreset" : "nickname");   // 재설정 링크면 새 비밀번호 화면, 아니면 항상 로그인 화면부터 시작한다
   const [nickFrom, setNickFrom] = useState(null);   // 이야기 노트에서 닉네임을 바꾸러 왔는가
   const [account, setAccount] = useState(getToken() ? { nick: "", providers: [] } : null);   // 로그인한 계정(토큰이 있으면 서버에서 확인한다)
   const [sync, setSync] = useState("idle");           // idle | saving | saved | offline
@@ -74,7 +74,7 @@ export default function App() {
   // 앱을 열 때 토큰이 있으면 서버에서 내 기록을 가져온다. 토큰이 만료됐으면 로그아웃 처리한다.
   useEffect(() => {
     if (!getToken()) return;
-    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (r.user.needsNick && sc !== "pwreset" ? "choosenick" : sc === "nickname" ? (seen ? "map" : "intro") : sc)); })   // 소셜로 처음 왔으면 닉네임부터 직접 정한다
+    getMe().then((r) => { setAccount(r.user); adoptServer(r.user.nick, r.state); if (entry.social) { const seen = mergeStates(loadState(), r.state || null).storySeen; setScreen((sc) => (r.user.needsNick && sc !== "pwreset" ? "choosenick" : sc === "nickname" ? (seen ? "map" : "intro") : sc)); } })   // 소셜로 처음 왔으면 닉네임부터 직접 정한다
       .catch((e) => { if (e.status === 401) { setToken(""); setAccount(null); } else setSync("offline"); });
   }, [adoptServer]);
   // 기록이 바뀌면 잠시 뒤 서버에 보관한다(로그인한 경우에만). 네트워크가 끊겨도 이 기기에는 이미 저장되어 있다.
@@ -337,7 +337,7 @@ export default function App() {
         </button>
       )}
 
-      {howto && <HowToScreen onClose={closeHowto} />}
+      {howto && screen === "map" && <HowToScreen onClose={closeHowto} />}
     </div>
   );
 }
