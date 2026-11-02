@@ -16,7 +16,7 @@ const HINT = {
 // 시작 화면: 로그인 / 가입 / 이 기기에서만 쓰기(손님) / 비밀번호 찾기. 로그인하면 진행과 편지함이 서버에 보관되어 기기를 바꿔도 이어진다.
 export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack }) {
   const [mode, setMode] = useState("login");              // login | register | guest | forgot
-  const [nick, setNick] = useState(initial);
+  const [nick, setNick] = useState(/^여행자d*$/.test(initial || "") ? "" : initial);   // 임시 닉네임(여행자123)은 칸에 남기지 않는다
   const [pw, setPw] = useState("");
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
