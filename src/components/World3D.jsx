@@ -7,6 +7,7 @@ import { ISLANDS, CENTER, POST_ISLAND, buildIsland, makeEnvelope, buoy, boat, ma
 
 // 직전에 보여 준 진행도. 새로 배달이 끝나 돌아왔을 때만 "구름이 걷히고 땅이 생기는" 연출을 재생한다.
 let seenCount = null;
+let pmAt = null;      // 우체부가 마지막으로 서 있던 섬 번호(0 = 해무의 집). 다음 섬으로 옮겨 갈 때 날아가는 모션의 출발점
 const smooth = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
 const backOut = (t) => { t = Math.max(0, Math.min(1, t)); const c = 1.7; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); };
 // 안개 구역: 해무의 집에서 마지막 섬까지 이어지는 길을 따라, 앞쪽 구역 전체가 안개로 덮여 있다.
@@ -34,7 +35,7 @@ const ISLETS = [{ x: -3.4, z: 5.2 }, { x: 12.4, z: 3.8 }, { x: 8.4, z: 17.4 }].m
 // ISLANDS[0]은 해무의 집(출발점), ISLANDS[i+1]은 편지 i의 도착 섬. 섬 사이의 점선 = 바람길,
 // 부표 = 아직 끊겨 있는 항로(배달하면 사라진다). WebGL이 없으면 SVG 지도로 대체.
 // postOpen: 편지섬이 열렸는가(네 통을 모두 전했는가). onPost: 편지섬을 눌렀을 때(내 편지 쓰기).
-export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost, interactive = true }) {
+export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen = false, onPost, interactive = true, flyIn = false }) {
   const wrap = useRef(null);
   const labels = useRef([]);
   const openRef = useRef(onOpen);
@@ -145,7 +146,11 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
     }));
     const turtles = [[12.5, -9, 0], [10.5, -5.5, 2.4]].map(([sc, tc, ph]) => { const m = makeTurtle(); m.scale.setScalar(1.4); world.add(m); return { m, sc, tc, ph }; });
     const pm = makePostman();
-    if (target >= 0) { pm.position.set(ISLANDS[target + 1].x, 2.5, ISLANDS[target + 1].z); world.add(pm); }
+    // 우체부는 오프닝이 끝나면 해무의 집에서, 편지를 전한 뒤에는 방금 섬에서 다음 섬으로 날아간다(바로 서 있지 않는다)
+    const dest = target + 1, from = target >= 0 ? (flyIn ? 0 : (pmAt ?? dest)) : dest;
+    if (target >= 0) pmAt = dest;
+    const trip = target >= 0 && from !== dest ? { a: ISLANDS[from], b: ISLANDS[dest], t0: null, dur: 3.6 } : null;
+    if (target >= 0) { const s0 = ISLANDS[from]; pm.position.set(s0.x, 2.5, s0.z); world.add(pm); }
 
     // ── 진행에 따라 넓어지는 바다: 구름이 걷히고, 지나온 섬은 다리와 땅으로 이어진다
     const delivered = letters.filter((l) => grades[l.id]).length;
@@ -281,9 +286,13 @@ export default function World3D({ letters, grades, isUnlocked, onOpen, postOpen 
         m.userData.flippers.forEach(({ f, z, front, base }) => { f.rotation.y = base + Math.sin(t * 2.2 + (front ? 0 : 1.2)) * 0.45 * z * (front ? -1 : 1); });
       });
       if (target >= 0) {
-        pm.position.y = 2.5 + Math.sin(t * 2) * 0.14;
-        pm.rotation.y = 0.5;
-        animatePostman(pm, t);
+        if (trip && trip.t0 === null && liveRef.current) trip.t0 = t + 0.6;     // 안내 카드를 닫고 지도가 보이면 날아오른다
+        const q = trip && trip.t0 !== null ? Math.min(1, Math.max(0, (t - trip.t0) / trip.dur)) : trip ? 0 : 1;
+        const e = q * q * (3 - 2 * q), s0 = trip ? trip.a : ISLANDS[dest], s1 = trip ? trip.b : ISLANDS[dest];
+        const flying = trip && q > 0 && q < 1;
+        pm.position.set(s0.x + (s1.x - s0.x) * e, 2.5 + Math.sin(t * 2) * 0.14 + (flying ? Math.sin(e * Math.PI) * 1.7 : 0), s0.z + (s1.z - s0.z) * e);
+        pm.rotation.y = flying ? Math.atan2(-(s1.z - s0.z), s1.x - s0.x) : 0.5;
+        animatePostman(pm, t, flying ? 0.95 : 0.6);
       }
       // 구름: 떠 있다가, 조건을 채우면 흩어지며 걷힌다. 이어서 땅이 솟고 다리가 놓인다
       const tb = reduce ? 1e3 : t;

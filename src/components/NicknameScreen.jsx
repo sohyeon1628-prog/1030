@@ -22,9 +22,10 @@ export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [sent, setSent] = useState(false);
-  const [prov, setProv] = useState({ providers: [], mail: false });
+  const [prov, setProv] = useState(null);                 // null = 아직 서버에 묻는 중, { providers, mail }, 또는 failed
+  const [provFail, setProvFail] = useState(false);
   const ref = useRef(null);
-  useEffect(() => { getProviders().then(setProv); }, []);
+  useEffect(() => { let on = true; getProviders().then((r) => { if (!on) return; r ? setProv(r) : setProvFail(true); }); return () => { on = false; }; }, []);
   useEffect(() => { ref.current?.focus(); setErr(""); setSent(false); }, [mode]);
   const acct = mode === "login" || mode === "register";
   const ok = mode === "forgot" ? /^\S+@\S+\.\S{2,}$/.test(email) : nick.trim().length >= 2 && (!acct || pw.length >= 6);
@@ -52,7 +53,7 @@ export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, 
 
         {mode === "forgot" ? (
           sent
-            ? <p className="auth-ok" role="status">{prov.mail ? "메일을 보냈어요. 편지함에서 링크를 눌러 주세요(30분 안). 인증한 이메일이 아니면 메일이 가지 않아요." : "메일 발송이 아직 설정되지 않은 서버예요. 관리자에게 문의해 주세요."}</p>
+            ? <p className="auth-ok" role="status">{prov?.mail ? "메일을 보냈어요. 편지함에서 링크를 눌러 주세요(30분 안). 인증한 이메일이 아니면 메일이 가지 않아요." : "메일 발송이 아직 설정되지 않은 서버예요. 관리자에게 문의해 주세요."}</p>
             : <label className="auth-field"><input ref={ref} type="email" value={email} maxLength={120} placeholder=" " autoComplete="email" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => enter(e)} /><span>이메일</span></label>
         ) : (
           <>
@@ -72,10 +73,12 @@ export default function NicknameScreen({ initial = "", onGuest, onAuth, onBack, 
           <button className="auth-btn" disabled={!ok || busy || sent} onClick={go}>{primary}</button>
         </div>
 
-        {acct && prov.providers.length > 0 && (
+        {acct && (prov === null || prov.providers.length > 0) && (
           <>
             <div className="auth-or"><span>또는</span></div>
-            {prov.providers.map((p) => <a key={p} className="auth-google" href={socialUrl(p)}><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>{SOCIAL[p] || p}로 계속하기</a>)}
+            {prov === null && !provFail && <span className="auth-google wait" aria-busy="true">Google 로그인 불러오는 중…</span>}
+            {prov === null && provFail && <button className="auth-google" onClick={() => { setProvFail(false); getProviders().then((r) => (r ? setProv(r) : setProvFail(true))); }}>서버에 연결하지 못했어요 · 다시 시도</button>}
+            {prov?.providers.map((p) => <a key={p} className="auth-google" href={socialUrl(p)}><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>{SOCIAL[p] || p}로 계속하기</a>)}
           </>
         )}
         <div className="auth-foot">

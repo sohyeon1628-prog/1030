@@ -12,7 +12,14 @@ export const logout = () => call("/api/auth/logout", { method: "POST", body: "{}
 export const getMe = () => call("/api/me");
 export const pushState = (state) => call("/api/me/state", { method: "PUT", body: JSON.stringify({ state }) }, 15000);
 // 계정 관리
-export const getProviders = () => call("/api/auth/providers").catch(() => ({ providers: [], mail: false }));
+// 소셜 로그인 목록: 무료 서버가 잠에서 깨는 동안(길면 1분)에는 응답이 늦으므로 여러 번 다시 시도한다. 끝내 못 받으면 null.
+export async function getProviders() {
+  for (let i = 0; i < 6; i++) {
+    try { return await call("/api/auth/providers", {}, 20000); } catch (e) { if (e.status && e.status !== 0 && e.status < 500) return null; }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return null;
+}
 export const socialUrl = (p) => `${BASE}/api/auth/oauth/${p}/start`;
 export const forgotPassword = (email) => call("/api/auth/forgot", { method: "POST", body: JSON.stringify({ email }) });
 export const resetPassword = (token, password) => call("/api/auth/reset", { method: "POST", body: JSON.stringify({ token, password }) });

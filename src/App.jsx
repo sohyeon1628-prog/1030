@@ -60,6 +60,7 @@ export default function App() {
   const [due, setDue] = useState(null);          // 파티 편지가 막 도착했을 때 알림 { id, to }
   const [focusId, setFocusId] = useState(null);   // 편지함이 열자마자 파티를 보여 줄 편지
   const [practice, setPractice] = useState(false);   // 지금 하는 비행이 연습인가
+  const [justIntro, setJustIntro] = useState(false);   // 오프닝을 막 마쳤는가: 지도에서 우체부가 해무의 집에서 어머니의 섬으로 날아간다
   const [run, setRun] = useState(0);                 // 비행 시작마다 증가 → 비행 화면 새로 시작
 
   // 이 기기와 서버의 기록을 합쳐 쓴다(로그인 직후, 그리고 앱을 열 때)
@@ -114,7 +115,7 @@ export default function App() {
   const fly = () => { setPractice(firstTime); setRun((r) => r + 1); setScreen("flight"); };
   const startPractice = () => { setPractice(true); setRun((r) => r + 1); setScreen("flight"); };
   const finishPractice = () => { update((s) => ({ ...s, practiceDone: true, tutorialSeen: true })); setPractice(false); setScreen("practiceEnd"); };
-  const open = (l) => { setLetter(l); setScreen("read"); };
+  const open = (l) => { setJustIntro(false); setLetter(l); setScreen("read"); };
   const closeHowto = () => { setHowto(false); update((s) => ({ ...s, howtoSeen: true })); };
 
   // 링크로 보낼 편지를 서버에 올린다(여러 사람이면 한 번에). 성공하면 편지함 항목마다 링크 정보(id, 회수용 secret)를 붙인다.
@@ -197,7 +198,7 @@ export default function App() {
       <div className="app">
         <Intro3D
           nickname={state.nickname}
-          onDone={() => { update((s) => ({ ...s, storySeen: true })); setHowto(!state.howtoSeen); setScreen("map"); }}
+          onDone={() => { update((s) => ({ ...s, storySeen: true })); setJustIntro(true); setHowto(!state.howtoSeen); setScreen("map"); }}
         />
       </div>
     );
@@ -222,7 +223,7 @@ export default function App() {
   return (
     <div className="app">
       <div className={`bg ${screen === "map" ? "" : "dim"}`}>
-        <World3D letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
+        <World3D flyIn={justIntro} letters={letters} grades={state.grade} isUnlocked={isUnlocked} onOpen={open} postOpen={storyDone} onPost={() => setScreen("write")} interactive={screen === "map" && !howto} />
       </div>
 
       {screen === "nickname" && <NicknameScreen initial={state.nickname} onGuest={submitNick} onAuth={onAuth} onBack={nickFrom ? () => { setNickFrom(null); setScreen("note"); } : undefined} onReset={nickFrom ? undefined : resetAll} />}

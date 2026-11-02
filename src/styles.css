@@ -651,3 +651,23 @@ a.btn { text-decoration: none; display: inline-flex; align-items: center; gap: 6
 .auth-google:hover { background: #f8f9fa; border-color: #d2e3fc; }
 .auth-err { margin: 0; font-size: 13px; color: #d93025; } .auth-ok { margin: 0; font-size: 14px; line-height: 1.6; color: #2c4a6e; font-weight: 600; }
 .auth-foot { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 6px; } .auth-foot .auth-link { align-self: center; font-weight: 500; }
+
+/* 내 계정: 로그인 화면과 같은 흰 카드, 구역은 가는 선으로 나눈 목록 */
+.auth-card.acct2 { width: min(480px, 94vw); gap: 0; max-height: 94vh; overflow-y: auto; }
+.acct2 .auth-sub { margin-bottom: 14px; }
+.acct-row2 { border-top: 1px solid #e8eaed; }
+.acct-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 15px 4px; border: 0; background: none; text-align: left; cursor: pointer; font: 400 14px "Pretendard", "Noto Sans KR", sans-serif; color: #202124; border-radius: 8px; }
+.acct-head:hover { background: #f8f9fa; }
+.acct-title { flex: none; width: 84px; font-weight: 600; color: #5f6368; font-size: 13.5px; }
+.acct-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #202124; }
+.acct-chev { color: #80868b; font-size: 16px; }
+.acct-body { display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 16px; }
+.acct-help { margin: 0; font-size: 12.5px; line-height: 1.6; color: #5f6368; }
+.acct2 .auth-ok, .acct2 .auth-err { margin: -4px 4px 10px; }
+.auth-actions.end { justify-content: flex-end; }
+.auth-link.danger { color: #d93025; } .auth-link.danger:hover { background: #fce8e6; }
+.auth-btn.danger { background: #d93025; } .auth-btn.danger:hover:not(:disabled) { background: #b3261e; }
+.acct2 > .auth-actions:last-child { border-top: 1px solid #e8eaed; padding-top: 16px; margin-top: 0; }
+
+.auth-google.wait { color: #80868b; font-weight: 500; cursor: default; }
+button.auth-google { cursor: pointer; width: 100%; }
