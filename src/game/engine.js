@@ -147,7 +147,7 @@ export function stepFlight(F, dt, fx) {
     F.windT -= dt;
     if (F.windState === "none" && F.windT <= 0) {
       F.windState = "warn"; F.windT = 0.7;
-      if (!F.hinted.w) { F.hinted.w = true; say(F, "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
+      if (!F.hinted.w) { F.hinted.w = true; say(F, F.touch ? "비바람이 몰려와요! 화면을 연달아 눌러 버텨요" : "비바람이 몰려와요! Enter를 연달아 눌러 버텨요", 3.2); }
     } else if (F.windState === "warn" && F.windT <= 0) {
       F.windState = "blow"; F.windT = 1.4 + 0.4 * ws + Math.random() * 1.0;
     } else if (F.windState === "blow" && F.windT <= 0) {
@@ -203,7 +203,7 @@ export function stepFlight(F, dt, fx) {
   const storm = !calm && !inZone && F.ribbon <= 0 && (F.windState === "blow" || raining);
   if (storm) {
     const B = F.brace;
-    if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, "Enter를 연달아 눌러 게이지를 채워요! 화면 버튼도 돼요", 3.2); } }
+    if (!B.on) { B.on = true; B.g = 0.6; if (!F.hinted.brace) { F.hinted.brace = true; say(F, F.touch ? "화면을 연달아 눌러 게이지를 채워요! 줄 옮기기는 쓸어서 해요" : "Enter를 연달아 눌러 게이지를 채워요!", 3.2); } }
     B.g = clamp(B.g + taps * 0.11 - dt * (0.26 + 0.03 * ws) * (F.umbrella > 0 && raining ? 0.7 : 1), 0, 1);
     if (B.g <= 0) { B.g = 0.5; say(F, "바람에 밀렸어요! 더 빨리 눌러요", 1.6); if (hit()) return; }
   } else F.brace.on = false;

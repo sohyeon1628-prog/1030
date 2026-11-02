@@ -661,7 +661,7 @@ export function drawFlight(ctx, F) {
     rr(ctx, W / 2 - 150, 150, 300, 14, 7, "rgba(31,74,99,.2)");
     rr(ctx, W / 2 - 150, 150, Math.max(8, 300 * g), 14, 7, col);
     ctx.font = `22px ${SANS}`; ctx.textAlign = "center";
-    outlined(ctx, low ? "Enter 연타! 연타!" : "Enter를 연달아 눌러 버텨요", W / 2, 188);
+    outlined(ctx, low ? (F.touch ? "화면을 연타! 연타!" : "Enter 연타! 연타!") : (F.touch ? "화면을 연달아 눌러 버텨요" : "Enter를 연달아 눌러 버텨요"), W / 2, 188);
     ctx.restore();
   }
 
@@ -676,7 +676,7 @@ export function drawFlight(ctx, F) {
     ctx.font = `64px ${SANS}`;
     outlined(ctx, String(Math.max(1, Math.ceil(F.cd))), W / 2, 250);
     if (F.showTutorial) {
-      ctx.font = `22px ${SANS}`; outlined(ctx, "↑ ↓ 키나 화면 위·아래를 눌러 한 줄씩 옮겨요", W / 2, 320);
+      ctx.font = `22px ${SANS}`; outlined(ctx, F.touch ? "화면 위쪽을 누르면 위로, 아래쪽을 누르면 아래로 한 줄씩 옮겨요" : "↑ ↓ 키나 화면 위·아래를 눌러 한 줄씩 옮겨요", W / 2, 320);
       ctx.font = `18px ${SANS}`; outlined(ctx, "경고가 뜬 줄을 피하고 구슬과 아이템을 모아요 · 하트가 다 닳면 이 구간만 다시 해요", W / 2, 356);
     }
   }
@@ -697,7 +697,7 @@ export function drawFlight(ctx, F) {
     }
   }
   if (F.mode === "fly" && F.windState === "warn") {
-    ctx.font = `22px ${SANS}`; outlined(ctx, "비바람이 몰려온다! Enter 준비", W / 2, 180);
+    ctx.font = `22px ${SANS}`; outlined(ctx, F.touch ? "비바람이 몰려온다! 화면 연타 준비" : "비바람이 몰려온다! Enter 준비", W / 2, 180);
   }
   if (F.msgT > 0) {
     ctx.font = `24px ${SANS}`;

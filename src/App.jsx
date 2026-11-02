@@ -294,7 +294,7 @@ export default function App() {
           {!state.tutorialSeen && (
             <aside className="recap tip">
               <b>날기 전에</b>
-              <p>높이는 세 줄이에요. <strong>↑ ↓ 키나 화면 위·아래 탭, 쓸어 넘기기</strong>로 한 줄씩 옮기세요. 경고가 뜬 줄을 피하고 반짝이는 구슬을 모아 보세요. 부딪혀도 이야기는 끊기지 않아요.</p>
+              <p>높이는 세 줄이에요. <strong>↑ ↓ 키, 휴대폰은 화면 위쪽·아래쪽 누르기나 쓸어 넘기기</strong>로 한 줄씩 옮기세요. 경고가 뜬 줄을 피하고 반짝이는 구슬을 모아 보세요. 부딪혀도 이야기는 끊기지 않아요.</p>
             </aside>
           )}
           <div className="row">

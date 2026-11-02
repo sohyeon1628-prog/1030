@@ -6,6 +6,7 @@ import { warmSprites } from "../game/sprites3d.js";
 import { audioStart, audioStop, audioUpdate, fx } from "../game/audio.js";
 import Icon from "./Icon.jsx";
 import { VolumeControls } from "./VolumePanel.jsx";
+import { touchAction } from "../touchControl.js";
 
 // 비행 단계: 높이를 위·가운데·아래 세 줄 중에서 한 줄씩 옮겨 날아간다.
 // 키보드 ↑↓(W/S, 스페이스는 위로) · 화면 위/아래 탭 · 위/아래 스와이프 · 화면 오른쪽의 ▲▼ 버튼.
@@ -15,7 +16,10 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
   const pausedRef = useRef(false);
   const startRef = useRef(null);        // 포인터를 누른 위치(스와이프 판별)
   const braceRef = useRef(0);           // 비바람 버티기: Enter(또는 버튼)를 누른 횟수
-  const [braceOn, setBraceOn] = useState(false);
+  const braceOnRef = useRef(false);     // 비바람 버티기 중인가(터치는 이때 화면 연타가 버티기가 된다)
+  const touch = useRef(typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches).current;
+  const [zones, setZones] = useState(true);   // 처음 몇 초 동안 위·아래 터치 영역을 옅게 보여 준다
+  useEffect(() => { const t = setTimeout(() => setZones(false), 7000); return () => clearTimeout(t); }, []);
   const [paused, setPaused] = useState(false);
 
   const setPause = (v) => { pausedRef.current = v; movesRef.current.length = 0; braceRef.current = 0; setPaused(v); };
@@ -36,7 +40,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
     fit();
     addEventListener("resize", fit);
     try { warmSprites(); } catch { /* WebGL이 없으면 2D 그림으로 */ }
-    const F = createFlight(letter, tutorialSeen, practice);
+    const F = createFlight(letter, tutorialSeen, practice); F.touch = touch;
     let raf, last = performance.now(), seenMarked = false, braceShown = false;
     audioStart();
 
@@ -47,7 +51,7 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
         F.viewW = cvs.width;
         while (movesRef.current.length) F.moves.push(movesRef.current.shift());
         F.braceTaps += braceRef.current; braceRef.current = 0;
-        if (F.brace.on !== braceShown) { braceShown = F.brace.on; setBraceOn(braceShown); }
+        if (F.brace.on !== braceShown) { braceShown = F.brace.on; braceOnRef.current = braceShown; }
         stepFlight(F, dt, fx);
         audioUpdate(F.thrust);
         if (!seenMarked && F.mode === "fly" && !practice) { seenMarked = true; onTutorialSeen(); }
@@ -82,25 +86,23 @@ export default function FlightScreen({ letter, practice = false, tutorialSeen, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [letter]);
 
-  // 화면을 눌렀다 뗄 때: 위/아래로 40px 넘게 끌면 스와이프, 아니면 탭(화면 위쪽 절반 = 위로, 아래쪽 절반 = 아래로)
+  // 화면 조작(터치·마우스): 위·아래로 40px 넘게 쓸면 그 방향으로 한 줄. 가볍게 누르면 화면 위쪽 40%는 위로, 아래쪽 40%는 아래로(가운데 20%는 반응 없음).
+  // 비바람 버티기 중에는 가볍게 누르는 것이 버티기 연타가 되고, 줄 옮기기는 쓸어서 한다.
   const onDown = (e) => { if (e.button === 0) { startRef.current = { y: e.clientY }; audioStart(); } };
   const onUp = (e) => {
     const s = startRef.current; startRef.current = null;
     if (!s || pausedRef.current) return;
-    const dy = e.clientY - s.y;
-    if (Math.abs(dy) > 40) move(dy < 0 ? 1 : -1);
-    else move(e.clientY < innerHeight / 2 ? 1 : -1);
+    const act = touchAction(e.clientY - s.y, e.clientY / innerHeight, braceOnRef.current);
+    if (act.type === "move") move(act.dir); else if (act.type === "brace") braceRef.current++;
   };
   const stop = (e) => e.stopPropagation();
 
   return (
     <div className="stage" onPointerDown={onDown} onPointerUp={onUp} onContextMenu={(e) => e.preventDefault()}>
       <canvas ref={canvasRef} width={W} height={H} />
-      <div className="lane-btns" onPointerDown={stop} onPointerUp={stop}>
-        <button className="lane-btn" aria-label="위로 한 줄" onPointerDown={(e) => { stop(e); move(1); }}><Icon name="up" size={28} /></button>
-        <button className="lane-btn" aria-label="아래로 한 줄" onPointerDown={(e) => { stop(e); move(-1); }}><Icon name="down" size={28} /></button>
-      </div>
-      {braceOn && <button className="brace-btn" onPointerDown={(e) => { stop(e); braceRef.current++; }} onPointerUp={stop} aria-label="버티기">버티기<small>Enter</small></button>}
+      {zones && !paused && (
+        <div className="zones" aria-hidden="true"><span className="zone up"><Icon name="up" size={30} />{touch ? "여기를 누르면 위로" : "위쪽을 누르면 위로"}</span><span className="zone down"><Icon name="down" size={30} />{touch ? "여기를 누르면 아래로" : "아래쪽을 누르면 아래로"}</span></div>
+      )}
       <button className="pause-btn" onPointerDown={stop} onPointerUp={stop} onClick={() => setPause(true)} aria-label="일시정지">Ⅱ</button>
       {paused && (
         <div className="overlay" onPointerDown={stop} onPointerUp={stop}>
